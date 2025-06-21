@@ -1,0 +1,65 @@
+#include <stdio.h>
+#include <string.h>
+#include <ctype.h>
+
+void processVigenere(char *input, char *key, char *output, int encrypt) {
+    int keyLen = strlen(key);
+    int keyIndex = 0;
+    
+    for(int i = 0; input[i] != '\0'; i++) {
+        if(isalpha(input[i])) {
+            // Determine shift amount from key
+            int shift = tolower(key[keyIndex % keyLen]) - 'a';
+            if(!encrypt) shift = 26 - shift; // Reverse for decryption
+            
+            // Process the character
+            char base = islower(input[i]) ? 'a' : 'A';
+            output[i] = base + (tolower(input[i]) - 'a' + shift) % 26;
+            
+            keyIndex++;
+        } else {
+            // Non-alphabetic characters remain unchanged
+            output[i] = input[i];
+        }
+    }
+    output[strlen(input)] = '\0';
+}
+
+int main() {
+    char text[256];
+    char key[256];
+    char processed[256];
+    int choice;
+    
+    printf("Vigenère Cipher Program\n");
+    printf("1. Encrypt\n");
+    printf("2. Decrypt\n");
+    printf("Enter choice (1 or 2): ");
+    scanf("%d", &choice);
+    getchar(); // Consume newline
+    
+    if(choice != 1 && choice != 2) {
+        printf("Invalid choice!\n");
+        return 1;
+    }
+    
+    printf("Enter text: ");
+    fgets(text, sizeof(text), stdin);
+    text[strcspn(text, "\n")] = '\0';
+    
+    printf("Enter key: ");
+    fgets(key, sizeof(key), stdin);
+    key[strcspn(key, "\n")] = '\0';
+    
+    processVigenere(text, key, processed, choice == 1);
+    
+    printf("\nOriginal: %s\n", text);
+    printf("Key: %s\n", key);
+    if(choice == 1) {
+        printf("Encrypted: %s\n", processed);
+    } else {
+        printf("Decrypted: %s\n", processed);
+    }
+    
+    return 0;
+}
