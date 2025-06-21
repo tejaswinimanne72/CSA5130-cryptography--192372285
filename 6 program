@@ -1,0 +1,92 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <ctype.h>
+
+// Function to calculate modular inverse
+int mod_inverse(int a, int m) {
+    a = a % m;
+    for (int x = 1; x < m; x++) {
+        if ((a * x) % m == 1) {
+            return x;
+        }
+    }
+    return -1; // No inverse exists
+}
+
+// Function to solve the affine cipher parameters
+void break_affine(char cipher1, char cipher2, char plain1, char plain2) {
+    // Convert characters to 0-25 values
+    int c1 = tolower(cipher1) - 'a';
+    int c2 = tolower(cipher2) - 'a';
+    int p1 = tolower(plain1) - 'a';
+    int p2 = tolower(plain2) - 'a';
+    
+    printf("Attempting to break affine cipher with:\n");
+    printf("  Ciphertext letters: %c (%d) and %c (%d)\n", cipher1, c1, cipher2, c2);
+    printf("  Assumed plaintext: %c (%d) and %c (%d)\n", plain1, p1, plain2, p2);
+    
+    // Solve for a and b in the equations:
+    // c1 = (a*p1 + b) mod 26
+    // c2 = (a*p2 + b) mod 26
+    
+    // Subtract equations: (c1 - c2) ≡ a(p1 - p2) mod 26
+    int diff_c = (c1 - c2 + 26) % 26;
+    int diff_p = (p1 - p2 + 26) % 26;
+    
+    // Find modular inverse of diff_p
+    int inv_diff_p = mod_inverse(diff_p, 26);
+    if (inv_diff_p == -1) {
+        printf("Cannot break cipher - no solution exists for these letter pairs.\n");
+        return;
+    }
+    
+    // Calculate a = (c1 - c2) * inv(p1 - p2) mod 26
+    int a = (diff_c * inv_diff_p) % 26;
+    
+    // Now calculate b = (c1 - a*p1) mod 26
+    int b = (c1 - a * p1) % 26;
+    if (b < 0) b += 26;
+    
+    // Verify the solution works for both equations
+    if ((a * p1 + b) % 26 != c1 || (a * p2 + b) % 26 != c2) {
+        printf("Found invalid solution - try different letter pairs.\n");
+        return;
+    }
+    
+    printf("\nFound possible affine cipher parameters:\n");
+    printf("  a = %d\n", a);
+    printf("  b = %d\n", b);
+    printf("  Decryption formula: p = a⁻¹(c - b) mod 26\n");
+    
+    int a_inv = mod_inverse(a, 26);
+    if (a_inv == -1) {
+        printf("Warning: a=%d has no inverse mod 26 - invalid cipher parameters!\n", a);
+        return;
+    }
+    
+    printf("  a⁻¹ = %d (modular inverse of %d mod 26)\n", a_inv, a);
+    
+    // Generate decryption mapping
+    printf("\nDecryption mapping:\n");
+    for (int c = 0; c < 26; c++) {
+        int p = (a_inv * (c - b + 26)) % 26;
+        printf("  %c -> %c\n", 'A' + c, 'A' + p);
+    }
+}
+
+int main() {
+    char cipher_most_freq = 'B';   // Most frequent ciphertext letter
+    char cipher_second_freq = 'U'; // Second most frequent ciphertext letter
+    char plain_most_freq = 'E';    // Assumed plaintext mapping (typically 'E' in English)
+    char plain_second_freq = 'T';  // Second assumed plaintext mapping (typically 'T')
+    
+    printf("Affine Cipher Cryptanalysis\n");
+    printf("Breaking cipher with:\n");
+    printf("- Most frequent ciphertext letter: %c (assumed to be %c)\n", cipher_most_freq, plain_most_freq);
+    printf("- Second most frequent ciphertext letter: %c (assumed to be %c)\n\n", cipher_second_freq, plain_second_freq);
+    
+    break_affine(cipher_most_freq, cipher_second_freq, plain_most_freq, plain_second_freq);
+    
+    return 0;
+}
