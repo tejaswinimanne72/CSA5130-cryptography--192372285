@@ -1,0 +1,61 @@
+#include <stdio.h>
+#include <ctype.h>
+#include <stdlib.h>
+#include <string.h>
+
+void caesar_cipher(char *text, int key, int encrypt) {
+    for (int i = 0; text[i] != '\0'; i++) {
+        if (isalpha(text[i])) {
+            char base = islower(text[i]) ? 'a' : 'A';
+            
+            if (encrypt) {
+                // Encryption: shift forward by key
+                text[i] = base + (text[i] - base + key) % 26;
+            } else {
+                // Decryption: shift backward by key
+                text[i] = base + (text[i] - base - key + 26) % 26;
+            }
+        }
+    }
+}
+
+int main() {
+    char text[1000];
+    int key, choice;
+    
+    printf("Caesar Cipher Program\n");
+    printf("1. Encrypt\n");
+    printf("2. Decrypt\n");
+    printf("Enter your choice (1 or 2): ");
+    scanf("%d", &choice);
+    
+    if (choice != 1 && choice != 2) {
+        printf("Invalid choice!\n");
+        return 1;
+    }
+    
+    // Clear input buffer
+    while (getchar() != '\n');
+    
+    printf("Enter the text: ");
+    fgets(text, sizeof(text), stdin);
+    text[strcspn(text, "\n")] = '\0'; // Remove trailing newline
+    
+    printf("Enter the key (1-25): ");
+    scanf("%d", &key);
+    
+    if (key < 1 || key > 25) {
+        printf("Key must be between 1 and 25!\n");
+        return 1;
+    }
+    
+    if (choice == 1) {
+        caesar_cipher(text, key, 1);
+        printf("Encrypted text: %s\n", text);
+    } else {
+        caesar_cipher(text, key, 0);
+        printf("Decrypted text: %s\n", text);
+    }
+    
+    return 0;
+}
