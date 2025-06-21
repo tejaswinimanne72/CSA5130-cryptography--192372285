@@ -1,0 +1,126 @@
+#include <stdio.h>
+#include <string.h>
+#include <ctype.h>
+
+#define SIZE 5
+
+void prepareKey(char *key, char keyMatrix[SIZE][SIZE]) {
+    int i, j, k = 0;
+    int used[26] = {0};
+    
+    // Fill in the keyword first
+    for(i = 0; i < strlen(key); i++) {
+        char c = toupper(key[i]);
+        if(c == 'J') c = 'I'; // Treat I and J as same
+        if(!used[c - 'A']) {
+            keyMatrix[k / SIZE][k % SIZE] = c;
+            used[c - 'A'] = 1;
+            k++;
+        }
+    }
+    
+    // Fill the rest with remaining letters (I and J share same position)
+    for(i = 0; i < 26; i++) {
+        char c = 'A' + i;
+        if(c == 'J') continue;
+        if(!used[i] && c != 'J') {
+            keyMatrix[k / SIZE][k % SIZE] = c;
+            k++;
+        }
+    }
+}
+
+void findPosition(char keyMatrix[SIZE][SIZE], char c, int *row, int *col) {
+    if(c == 'J') c = 'I';
+    for(int i = 0; i < SIZE; i++) {
+        for(int j = 0; j < SIZE; j++) {
+            if(keyMatrix[i][j] == c) {
+                *row = i;
+                *col = j;
+                return;
+            }
+        }
+    }
+}
+
+void encryptPair(char keyMatrix[SIZE][SIZE], char a, char b, char *encrypted) {
+    int row1, col1, row2, col2;
+    findPosition(keyMatrix, a, &row1, &col1);
+    findPosition(keyMatrix, b, &row2, &col2);
+    
+    if(row1 == row2) { // Same row
+        encrypted[0] = keyMatrix[row1][(col1 + 1) % SIZE];
+        encrypted[1] = keyMatrix[row2][(col2 + 1) % SIZE];
+    }
+    else if(col1 == col2) { // Same column
+        encrypted[0] = keyMatrix[(row1 + 1) % SIZE][col1];
+        encrypted[1] = keyMatrix[(row2 + 1) % SIZE][col2];
+    }
+    else { // Rectangle
+        encrypted[0] = keyMatrix[row1][col2];
+        encrypted[1] = keyMatrix[row2][col1];
+    }
+}
+
+void playfairEncrypt(char *plaintext, char *key, char *ciphertext) {
+    char keyMatrix[SIZE][SIZE];
+    prepareKey(key, keyMatrix);
+    
+    // Prepare plaintext: remove spaces, handle double letters, make even length
+    char processedText[100];
+    int j = 0;
+    for(int i = 0; plaintext[i]; i++) {
+        if(isalpha(plaintext[i])) {
+            processedText[j++] = toupper(plaintext[i]);
+        }
+    }
+    processedText[j] = '\0';
+    
+    // Handle double letters and odd length
+    for(int i = 0; i < strlen(processedText); i += 2) {
+        if(i + 1 >= strlen(processedText)) {
+            processedText[i + 1] = 'X';
+            processedText[i + 2] = '\0';
+        }
+        else if(processedText[i] == processedText[i + 1]) {
+            memmove(&processedText[i + 2], &processedText[i + 1], strlen(processedText) - i);
+            processedText[i + 1] = 'X';
+        }
+    }
+    
+    // Encrypt pairs
+    for(int i = 0; i < strlen(processedText); i += 2) {
+        encryptPair(keyMatrix, processedText[i], processedText[i + 1], &ciphertext[i]);
+    }
+    ciphertext[strlen(processedText)] = '\0';
+}
+
+int main() {
+    char key[50];
+    char plaintext[100];
+    char ciphertext[100] = {0};
+    
+    printf("Enter key: ");
+    fgets(key, sizeof(key), stdin);
+    key[strcspn(key, "\n")] = '\0';
+    
+    printf("Enter plaintext: ");
+    fgets(plaintext, sizeof(plaintext), stdin);
+    plaintext[strcspn(plaintext, "\n")] = '\0';
+    
+    playfairEncrypt(plaintext, key, ciphertext);
+    
+    printf("\nKey Matrix:\n");
+    char keyMatrix[SIZE][SIZE];
+    prepareKey(key, keyMatrix);
+    for(int i = 0; i < SIZE; i++) {
+        for(int j = 0; j < SIZE; j++) {
+            printf("%c ", keyMatrix[i][j]);
+        }
+        printf("\n");
+    }
+    
+    printf("\nEncrypted Text: %s\n", ciphertext);
+    
+    return 0;
+}
