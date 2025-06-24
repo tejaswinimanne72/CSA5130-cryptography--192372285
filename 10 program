@@ -1,0 +1,100 @@
+#include <stdio.h>
+#include <string.h>
+#include <ctype.h>
+
+#define SIZE 5
+
+// Fixed Playfair matrix
+char matrix[SIZE][SIZE] = {
+    {'M', 'F', 'H', 'I', 'K'},
+    {'U', 'N', 'O', 'P', 'Q'},
+    {'Z', 'V', 'W', 'X', 'Y'},
+    {'E', 'L', 'A', 'R', 'G'},
+    {'D', 'S', 'T', 'B', 'C'}
+};
+
+// Find the row and column of a character in the matrix
+void findPosition(char ch, int *row, int *col) {
+    if (ch == 'J') ch = 'I';
+    for (int i = 0; i < SIZE; i++)
+        for (int j = 0; j < SIZE; j++)
+            if (matrix[i][j] == ch) {
+                *row = i;
+                *col = j;
+                return;
+            }
+}
+
+// Prepare input: remove non-letters, uppercase, handle duplicates
+void prepareInput(char *input, char *output) {
+    int len = 0;
+    for (int i = 0; input[i]; i++) {
+        if (isalpha(input[i])) {
+            output[len++] = toupper(input[i]) == 'J' ? 'I' : toupper(input[i]);
+        }
+    }
+    output[len] = '\0';
+
+    // Create digraphs and insert 'X' between repeating letters
+    char temp[512];
+    int i = 0, j = 0;
+    while (output[i]) {
+        temp[j++] = output[i];
+        if (output[i + 1] == output[i]) {
+            temp[j++] = 'X';
+            i++;
+        } else {
+            if (output[i + 1]) {
+                temp[j++] = output[i + 1];
+                i += 2;
+            } else {
+                temp[j++] = 'X'; // Padding if odd
+                i++;
+            }
+        }
+    }
+    temp[j] = '\0';
+    strcpy(output, temp);
+}
+
+// Encrypt the message using Playfair cipher
+void encryptPlayfair(char *plaintext, char *ciphertext) {
+    for (int i = 0; plaintext[i] && plaintext[i + 1]; i += 2) {
+        char a = plaintext[i];
+        char b = plaintext[i + 1];
+        int r1, c1, r2, c2;
+
+        findPosition(a, &r1, &c1);
+        findPosition(b, &r2, &c2);
+
+        if (r1 == r2) {
+            ciphertext[i]     = matrix[r1][(c1 + 1) % SIZE];
+            ciphertext[i + 1] = matrix[r2][(c2 + 1) % SIZE];
+        } else if (c1 == c2) {
+            ciphertext[i]     = matrix[(r1 + 1) % SIZE][c1];
+            ciphertext[i + 1] = matrix[(r2 + 1) % SIZE][c2];
+        } else {
+            ciphertext[i]     = matrix[r1][c2];
+            ciphertext[i + 1] = matrix[r2][c1];
+        }
+    }
+    ciphertext[strlen(plaintext)] = '\0';
+}
+
+int main() {
+    char message[] = "Must see you over Cadogan West. Coming at once.";
+    char prepared[512], encrypted[512];
+
+    prepareInput(message, prepared);
+    encryptPlayfair(prepared, encrypted);
+
+    printf("Prepared Message:\n%s\n", prepared);
+    printf("\nEncrypted Message:\n");
+    for (int i = 0; encrypted[i]; i++) {
+        printf("%c", encrypted[i]);
+        if ((i + 1) % 5 == 0) printf(" "); // group by 5
+    }
+    printf("\n");
+
+    return 0;
+}
