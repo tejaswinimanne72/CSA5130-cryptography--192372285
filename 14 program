@@ -1,0 +1,89 @@
+#include <stdio.h>
+#include <string.h>
+#include <ctype.h>
+
+#define MAX_LEN 256
+
+// Convert lowercase letter to 0-25 number
+int char_to_num(char c) {
+    return c - 'a';
+}
+
+// Convert 0-25 number to lowercase letter
+char num_to_char(int n) {
+    return n + 'a';
+}
+
+// Remove spaces and convert to lowercase
+void preprocess(const char *input, char *output) {
+    int j = 0;
+    for (int i = 0; input[i]; i++) {
+        if (isalpha(input[i])) {
+            output[j++] = tolower(input[i]);
+        }
+    }
+    output[j] = '\0';
+}
+
+// Encrypt plaintext using key stream
+void encrypt(const char *plaintext, int *key, int len, char *ciphertext) {
+    for (int i = 0; i < len; i++) {
+        int p = char_to_num(plaintext[i]);
+        int c = (p + key[i]) % 26;
+        ciphertext[i] = num_to_char(c);
+    }
+    ciphertext[len] = '\0';
+}
+
+// Recover key from given plaintext and ciphertext
+void recover_key(const char *plaintext, const char *ciphertext, int *key, int len) {
+    for (int i = 0; i < len; i++) {
+        int p = char_to_num(plaintext[i]);
+        int c = char_to_num(ciphertext[i]);
+        key[i] = (c - p + 26) % 26;
+    }
+}
+
+int main() {
+    char plaintext[MAX_LEN], ciphertext[MAX_LEN];
+    char proc_plain[MAX_LEN], proc_cipher[MAX_LEN];
+    int key[MAX_LEN];
+    int len;
+
+    // Part (a) Encrypt the plaintext "send more money" with given key stream
+    strcpy(plaintext, "send more money");
+    int given_key[] = {9, 0, 1, 7, 23, 15, 21, 14, 11, 11, 2, 8, 9};
+    
+    preprocess(plaintext, proc_plain);
+    len = strlen(proc_plain);
+
+    printf("Plaintext after preprocessing: %s\n", proc_plain);
+    printf("Given key stream: ");
+    for (int i = 0; i < len; i++) printf("%d ", given_key[i]);
+    printf("\n");
+
+    encrypt(proc_plain, given_key, len, ciphertext);
+    printf("Ciphertext: %s\n\n", ciphertext);
+
+    // Part (b) Recover the key so ciphertext decrypts to "cash not needed"
+    // Use ciphertext from part (a)
+    char known_plaintext[] = "cash not needed";
+    preprocess(known_plaintext, proc_plain);
+    preprocess(ciphertext, proc_cipher);
+
+    if (strlen(proc_plain) != strlen(proc_cipher)) {
+        printf("Plaintext and ciphertext length mismatch!\n");
+        return 1;
+    }
+
+    len = strlen(proc_plain);
+    recover_key(proc_plain, proc_cipher, key, len);
+
+    printf("Recovered key to decrypt ciphertext to '%s':\n", proc_plain);
+    for (int i = 0; i < len; i++) {
+        printf("%d ", key[i]);
+    }
+    printf("\n");
+
+    return 0;
+}
