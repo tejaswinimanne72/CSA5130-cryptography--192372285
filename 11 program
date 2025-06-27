@@ -1,0 +1,40 @@
+#include <stdio.h>
+#include <math.h>
+
+#define N 25  // Total letters in Playfair cipher (A–Z with I/J combined)
+
+// Function to compute log2(n!) efficiently
+double log2_factorial(int n) {
+    double log2_fact = 0.0;
+    for (int i = 1; i <= n; i++) {
+        log2_fact += log2(i);  // log2(i) = log(i) / log(2)
+    }
+    return log2_fact;
+}
+
+int main() {
+    int symmetry_factor;
+    
+    // Input from user
+    printf("Enter estimated symmetry factor (e.g., 8, 64, 256, 1024): ");
+    scanf("%d", &symmetry_factor);
+    
+    // Validation
+    if (symmetry_factor <= 0) {
+        printf("Symmetry factor must be a positive integer.\n");
+        return 1;
+    }
+
+    // Compute log2(25!)
+    double log2_total_keys = log2_factorial(N);
+    
+    // Compute log2(unique_keys) = log2(total_keys) - log2(symmetry_factor)
+    double log2_unique_keys = log2_total_keys - log2(symmetry_factor);
+    
+    // Output results
+    printf("\nPlayfair Cipher Keyspace Estimation:\n");
+    printf("Total possible keys: ~ 2^%.2f\n", log2_total_keys);
+    printf("Effectively unique keys (after symmetry reduction): ~ 2^%.2f\n", log2_unique_keys);
+    
+    return 0;
+}
