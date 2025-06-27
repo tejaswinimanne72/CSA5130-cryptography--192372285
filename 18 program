@@ -1,0 +1,121 @@
+#include <stdio.h>
+#include <stdint.h>
+#include <string.h>
+
+// PC-1 table (standard DES PC-1)
+int PC1[56] = {
+    57,49,41,33,25,17,9,
+    1,58,50,42,34,26,18,
+    10,2,59,51,43,35,27,
+    19,11,3,60,52,44,36,
+    63,55,47,39,31,23,15,
+    7,62,54,46,38,30,22,
+    14,6,61,53,45,37,29,
+    21,13,5,28,20,12,4
+};
+
+// Shift schedule for each of the 16 rounds
+int Shifts[16] = {
+    1,1,2,2,2,2,2,2,
+    1,2,2,2,2,2,2,1
+};
+
+// Bit helpers
+
+// Get bit at position 'pos' from data array (0-based bit index)
+int get_bit(uint8_t *data, int pos) {
+    int byte = pos / 8;
+    int bit = 7 - (pos % 8);
+    return (data[byte] >> bit) & 1;
+}
+
+// Set bit at position 'pos' in data array
+void set_bit(uint8_t *data, int pos, int val) {
+    int byte = pos / 8;
+    int bit = 7 - (pos % 8);
+    if(val)
+        data[byte] |= (1 << bit);
+    else
+        data[byte] &= ~(1 << bit);
+}
+
+// Left circular shift for 28 bits
+void left_shift_28(uint8_t *half, int shifts) {
+    for (int s = 0; s < shifts; s++) {
+        int first_bit = get_bit(half, 0);
+        for (int i = 0; i < 27; i++) {
+            int bit_val = get_bit(half, i + 1);
+            set_bit(half, i, bit_val);
+        }
+        set_bit(half, 27, first_bit);
+    }
+}
+
+// Permute 64-bit key using PC-1 to get 56 bits
+void permute_pc1(uint8_t *key64, uint8_t *key56) {
+    memset(key56, 0, 7);
+    for(int i = 0; i < 56; i++) {
+        int val = get_bit(key64, PC1[i]-1);
+        set_bit(key56, i, val);
+    }
+}
+
+// Print 48-bit key (6 bytes) in hex
+void print_subkey(uint8_t *subkey) {
+    for(int i = 0; i < 6; i++) {
+        printf("%02X ", subkey[i]);
+    }
+    printf("\n");
+}
+
+int main() {
+    // Example 64-bit key (8 bytes)
+    uint8_t key64[8] = {0x13,0x34,0x57,0x79,0x9B,0xBC,0xDF,0xF1};
+    
+    // Step 1: Apply PC-1 permutation to get 56-bit key
+    uint8_t key56[7] = {0};
+    permute_pc1(key64, key56);
+    
+    // Split into two halves C and D (28 bits each)
+    uint8_t C[4] = {0}; // 28 bits ~ 4 bytes
+    uint8_t D[4] = {0};
+    
+    for (int i = 0; i < 28; i++) {
+        set_bit(C, i, get_bit(key56, i));
+        set_bit(D, i, get_bit(key56, i+28));
+    }
+    
+    // Generate 16 subkeys of 48 bits each
+    uint8_t subkeys[16][6] = {0}; // 48 bits = 6 bytes
+    
+    for (int round = 0; round < 16; round++) {
+        // Left shift C and D according to schedule
+        left_shift_28(C, Shifts[round]);
+        left_shift_28(D, Shifts[round]);
+        
+        // Take first 24 bits from C and D each to form subkey halves
+        // Clear subkey buffer first
+        memset(subkeys[round], 0, 6);
+        
+        // Copy first 24 bits from C -> subkey[0..2]
+        for (int i = 0; i < 24; i++) {
+            int bit_val = get_bit(C, i);
+            set_bit(subkeys[round], i, bit_val);
+        }
+        
+        // Copy first 24 bits from D -> subkey[24..47]
+        for (int i = 0; i < 24; i++) {
+            int bit_val = get_bit(D, i);
+            set_bit(subkeys[round], i + 24, bit_val);
+        }
+    }
+    
+    // Print all subkeys
+    printf("Generated 16 subkeys (48 bits each):\n");
+    for (int i = 0; i < 16; i++) {
+        printf("Subkey %2d: ", i+1);
+        print_subkey(subkeys[i]);
+    }
+    
+    return 0;
+}
