@@ -1,0 +1,90 @@
+#include <stdio.h>
+#define MOD 26
+
+// Function to compute determinant mod 26
+int mod_det(int a, int b, int c, int d) {
+    int det = (a * d - b * c) % MOD;
+    if (det < 0) det += MOD;
+    return det;
+}
+
+// Modular multiplicative inverse of a mod 26
+int mod_inverse(int a) {
+    a = a % MOD;
+    for (int i = 1; i < MOD; i++) {
+        if ((a * i) % MOD == 1)
+            return i;
+    }
+    return -1; // No inverse exists
+}
+
+// Compute modular inverse of 2x2 matrix
+// input: matrix[2][2], output: inv[2][2]
+// Returns 0 if inverse doesn't exist, 1 otherwise
+int matrix_inverse(int matrix[2][2], int inv[2][2]) {
+    int det = mod_det(matrix[0][0], matrix[0][1], matrix[1][0], matrix[1][1]);
+    int det_inv = mod_inverse(det);
+    if (det_inv == -1) return 0;
+
+    inv[0][0] =  matrix[1][1] * det_inv % MOD;
+    inv[0][1] = -matrix[0][1] * det_inv % MOD;
+    inv[1][0] = -matrix[1][0] * det_inv % MOD;
+    inv[1][1] =  matrix[0][0] * det_inv % MOD;
+
+    for (int i = 0; i < 2; i++)
+        for (int j = 0; j < 2; j++)
+            if (inv[i][j] < 0)
+                inv[i][j] += MOD;
+
+    return 1;
+}
+
+// Multiply 2x2 matrix A by 2x2 matrix B mod 26, store in result
+void matrix_multiply(int A[2][2], int B[2][2], int result[2][2]) {
+    for (int i = 0; i < 2; i++)
+        for (int j = 0; j < 2; j++) {
+            result[i][j] = 0;
+            for (int k = 0; k < 2; k++) {
+                result[i][j] += A[i][k] * B[k][j];
+            }
+            result[i][j] %= MOD;
+        }
+}
+
+void print_matrix(int M[2][2]) {
+    printf("[[%d, %d],\n [%d, %d]]\n", M[0][0], M[0][1], M[1][0], M[1][1]);
+}
+
+int main() {
+    // For 2x2 Hill cipher, we need 2 plaintext vectors and 2 ciphertext vectors (each vector length 2)
+    // We will take plaintext and ciphertext pairs as input columns for matrices P and C.
+
+    int P[2][2], C[2][2];
+    int P_inv[2][2], K[2][2];
+
+    printf("Enter 2 plaintext vectors (each vector 2 letters as numbers 0=A ... 25=Z):\n");
+    for (int col = 0; col < 2; col++) {
+        printf("Plaintext vector %d (2 numbers separated by space): ", col + 1);
+        scanf("%d %d", &P[0][col], &P[1][col]);
+    }
+
+    printf("Enter corresponding 2 ciphertext vectors (each vector 2 numbers 0-25):\n");
+    for (int col = 0; col < 2; col++) {
+        printf("Ciphertext vector %d (2 numbers separated by space): ", col + 1);
+        scanf("%d %d", &C[0][col], &C[1][col]);
+    }
+
+    // Find inverse of P
+    if (!matrix_inverse(P, P_inv)) {
+        printf("Matrix P is not invertible mod 26, can't recover key.\n");
+        return 1;
+    }
+
+    // Compute K = C * P_inv mod 26
+    matrix_multiply(C, P_inv, K);
+
+    printf("Recovered Key matrix K:\n");
+    print_matrix(K);
+
+    return 0;
+}
