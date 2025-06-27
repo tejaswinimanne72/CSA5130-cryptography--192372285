@@ -1,0 +1,192 @@
+#include <stdio.h>
+#include <stdint.h>
+#include <string.h>
+
+#define BLOCK_SIZE 64
+#define KEY_SIZE 64
+#define HALF_BLOCK 32
+
+// Permutation tables, S-boxes, shifts - fill in fully with DES standard tables
+int PC1[56] = {
+    /* PC-1 table here */
+    57,49,41,33,25,17,9,
+    1,58,50,42,34,26,18,
+    10,2,59,51,43,35,27,
+    19,11,3,60,52,44,36,
+    63,55,47,39,31,23,15,
+    7,62,54,46,38,30,22,
+    14,6,61,53,45,37,29,
+    21,13,5,28,20,12,4
+};
+
+int PC2[48] = {
+    /* PC-2 table here */
+    14,17,11,24,1,5,
+    3,28,15,6,21,10,
+    23,19,12,4,26,8,
+    16,7,27,20,13,2,
+    41,52,31,37,47,55,
+    30,40,51,45,33,48,
+    44,49,39,56,34,53,
+    46,42,50,36,29,32
+};
+
+int Shifts[16] = { // Shift schedule for key generation
+    1, 1, 2, 2,
+    2, 2, 2, 2,
+    1, 2, 2, 2,
+    2, 2, 2, 1
+};
+
+// IP and FP tables (initial and final permutation)
+int IP[64] = {
+    /* IP table here */
+};
+
+int FP[64] = {
+    /* FP table here */
+};
+
+// Expansion, S-boxes, P-permutation also needed (not fully shown here)
+
+// Function prototypes
+void permute(uint8_t *in, uint8_t *out, int *table, int n);
+void left_shift_28(uint8_t *key28, int shifts);
+void generate_round_keys(uint8_t *key64, uint8_t round_keys[16][6]);
+void des_round(uint8_t *L, uint8_t *R, uint8_t *round_key);
+void des_encrypt(uint8_t *block, uint8_t round_keys[16][6]);
+void des_decrypt(uint8_t *block, uint8_t round_keys[16][6]);
+
+// Helper to print 64-bit block
+void print_block(uint8_t *block) {
+    for (int i = 0; i < 8; i++) {
+        printf("%02X ", block[i]);
+    }
+    printf("\n");
+}
+
+// Bit operations helpers
+int get_bit(uint8_t *data, int pos) {
+    int byte = pos / 8;
+    int bit = 7 - (pos % 8);
+    return (data[byte] >> bit) & 1;
+}
+
+void set_bit(uint8_t *data, int pos, int val) {
+    int byte = pos / 8;
+    int bit = 7 - (pos % 8);
+    if (val) data[byte] |= (1 << bit);
+    else data[byte] &= ~(1 << bit);
+}
+
+// Permutation function (generic)
+void permute(uint8_t *in, uint8_t *out, int *table, int n) {
+    memset(out, 0, (n+7)/8);
+    for (int i = 0; i < n; i++) {
+        int val = get_bit(in, table[i] - 1);
+        set_bit(out, i, val);
+    }
+}
+
+// Left circular shift for 28-bit halves
+void left_shift_28(uint8_t *key28, int shifts) {
+    for (int s = 0; s < shifts; s++) {
+        int first_bit = get_bit(key28, 0);
+        for (int i = 0; i < 27; i++) {
+            int val = get_bit(key28, i + 1);
+            set_bit(key28, i, val);
+        }
+        set_bit(key28, 27, first_bit);
+    }
+}
+
+// Generate all 16 round keys (48 bits each)
+void generate_round_keys(uint8_t *key64, uint8_t round_keys[16][6]) {
+    uint8_t key56[7] = {0};
+    permute(key64, key56, PC1, 56);
+
+    // Split into C and D halves (28 bits each)
+    uint8_t C[4] = {0}, D[4] = {0};
+    for (int i = 0; i < 28; i++) {
+        set_bit(C, i, get_bit(key56, i));
+        set_bit(D, i, get_bit(key56, i + 28));
+    }
+
+    for (int round = 0; round < 16; round++) {
+        left_shift_28(C, Shifts[round]);
+        left_shift_28(D, Shifts[round]);
+
+        // Combine C and D back
+        uint8_t CD[7] = {0};
+        for (int i = 0; i < 28; i++) set_bit(CD, i, get_bit(C, i));
+        for (int i = 0; i < 28; i++) set_bit(CD, i + 28, get_bit(D, i));
+
+        // Apply PC-2 to get round key (48 bits)
+        permute(CD, round_keys[round], PC2, 48);
+    }
+}
+
+// DES round function (placeholder, requires expansion, S-boxes, P-perm)
+void des_round(uint8_t *L, uint8_t *R, uint8_t *round_key) {
+    // Expand R to 48 bits, XOR with round_key
+    // Apply S-box substitutions
+    // Apply P permutation
+    // XOR with L
+    // Swap halves - This needs full implementation
+}
+
+// Encrypt block with DES using round keys
+void des_encrypt(uint8_t *block, uint8_t round_keys[16][6]) {
+    uint8_t temp[8], L[4], R[4];
+    permute(block, temp, IP, 64);
+
+    memcpy(L, temp, 4);
+    memcpy(R, temp + 4, 4);
+
+    for (int i = 0; i < 16; i++) {
+        // DES round (needs full implementation)
+        // des_round(L, R, round_keys[i]);
+        // swap L and R accordingly
+    }
+
+    // Final permutation (FP)
+    // Combine L and R and permute using FP to get ciphertext
+    // ...
+}
+
+// Decrypt block with DES using round keys in reverse order
+void des_decrypt(uint8_t *block, uint8_t round_keys[16][6]) {
+    uint8_t temp[8], L[4], R[4];
+    permute(block, temp, IP, 64);
+
+    memcpy(L, temp, 4);
+    memcpy(R, temp + 4, 4);
+
+    // Use keys in reverse order
+    for (int i = 15; i >= 0; i--) {
+        // DES round (needs full implementation)
+        // des_round(L, R, round_keys[i]);
+        // swap L and R accordingly
+    }
+
+    // Final permutation (FP)
+    // Combine L and R and permute using FP to get plaintext
+    // ...
+}
+
+int main() {
+    uint8_t key[8] = {0x13,0x34,0x57,0x79,0x9B,0xBC,0xDF,0xF1}; // Example key
+    uint8_t round_keys[16][6];
+    uint8_t block[8] = {0x01,0x23,0x45,0x67,0x89,0xAB,0xCD,0xEF}; // Example ciphertext block
+
+    printf("Generating round keys...\n");
+    generate_round_keys(key, round_keys);
+
+    printf("Decrypting block:\n");
+    des_decrypt(block, round_keys);
+
+    printf("Decrypted block: ");
+    print_block(block);
+
+    return 0;
+}
