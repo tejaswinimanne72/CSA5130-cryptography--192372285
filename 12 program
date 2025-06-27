@@ -1,0 +1,118 @@
+#include <stdio.h>
+#include <string.h>
+#include <ctype.h>
+
+#define MOD 26
+
+// Function to compute determinant
+int determinant(int a, int b, int c, int d) {
+    return (a * d - b * c);
+}
+
+// Function to find modular inverse of a number modulo 26
+int mod_inverse(int a) {
+    a = a % MOD;
+    for (int x = 1; x < MOD; x++) {
+        if ((a * x) % MOD == 1) return x;
+    }
+    return -1; // No modular inverse
+}
+
+// Encryption: C = (K × P) mod 26
+void hill_encrypt(char* msg, int key[2][2]) {
+    int len = strlen(msg);
+    printf("\nEncrypted Message: ");
+    for (int i = 0; i < len; i += 2) {
+        int p1 = msg[i] - 'a';
+        int p2 = msg[i+1] - 'a';
+
+        int c1 = (key[0][0]*p1 + key[0][1]*p2) % MOD;
+        int c2 = (key[1][0]*p1 + key[1][1]*p2) % MOD;
+
+        printf("%c%c", c1 + 'a', c2 + 'a');
+    }
+    printf("\n");
+}
+
+// Decryption: P = (K⁻¹ × C) mod 26
+void hill_decrypt(char* cipher, int key[2][2]) {
+    int len = strlen(cipher);
+
+    // Calculate inverse key matrix
+    int det = determinant(key[0][0], key[0][1], key[1][0], key[1][1]);
+    int det_inv = mod_inverse(det);
+    if (det_inv == -1) {
+        printf("Key matrix is not invertible under mod 26.\n");
+        return;
+    }
+
+    // Adjoint and inverse modulo 26
+    int inv_key[2][2];
+    inv_key[0][0] =  key[1][1] * det_inv % MOD;
+    inv_key[0][1] = -key[0][1] * det_inv % MOD;
+    inv_key[1][0] = -key[1][0] * det_inv % MOD;
+    inv_key[1][1] =  key[0][0] * det_inv % MOD;
+
+    // Ensure positive modulo
+    for (int i = 0; i < 2; i++)
+        for (int j = 0; j < 2; j++)
+            if (inv_key[i][j] < 0)
+                inv_key[i][j] += MOD;
+
+    printf("\nDecrypted Message: ");
+    for (int i = 0; i < len; i += 2) {
+        int c1 = cipher[i] - 'a';
+        int c2 = cipher[i+1] - 'a';
+
+        int p1 = (inv_key[0][0]*c1 + inv_key[0][1]*c2) % MOD;
+        int p2 = (inv_key[1][0]*c1 + inv_key[1][1]*c2) % MOD;
+
+        printf("%c%c", p1 + 'a', p2 + 'a');
+    }
+    printf("\n");
+}
+
+// Function to preprocess message: remove spaces, convert to lowercase, pad if odd
+void preprocess(char* input, char* output) {
+    int j = 0;
+    for (int i = 0; input[i]; i++) {
+        if (isalpha(input[i])) {
+            output[j++] = tolower(input[i]);
+        }
+    }
+    if (j % 2 != 0) {
+        output[j++] = 'x';  // Padding
+    }
+    output[j] = '\0';
+}
+
+int main() {
+    char input[256], msg[256], cipher[256];
+    int key[2][2];
+
+    // Input
+    printf("Enter the plaintext message: ");
+    fgets(input, sizeof(input), stdin);
+
+    // Preprocess
+    preprocess(input, msg);
+    printf("Processed message: %s\n", msg);
+
+    // Key input
+    printf("Enter 4 elements of the 2x2 key matrix (row-wise):\n");
+    for (int i = 0; i < 2; i++)
+        for (int j = 0; j < 2; j++)
+            scanf("%d", &key[i][j]);
+
+    // Encrypt
+    hill_encrypt(msg, key);
+
+    // Prepare cipher text for decryption
+    printf("\nRe-enter the ciphertext for decryption: ");
+    scanf("%s", cipher);
+
+    // Decrypt
+    hill_decrypt(cipher, key);
+
+    return 0;
+}
