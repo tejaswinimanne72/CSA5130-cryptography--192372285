@@ -1,0 +1,174 @@
+#include <stdio.h>
+#include <string.h>
+#include <ctype.h>
+#include <stdlib.h>
+
+#define MAX_LEN 1024
+#define ALPHABET 26
+#define MAX_CANDIDATES 10
+
+// English letter frequency order (most to least frequent)
+const char english_freq_order[ALPHABET] = {
+    'e','t','a','o','i','n','s','h','r','d','l','c','u','m','w','f','g','y','p','b','v','k','j','x','q','z'
+};
+
+// English letter frequencies for scoring
+double english_freq[ALPHABET] = {
+    8.167, 1.492, 2.782, 4.253, 12.702, 2.228,
+    2.015, 6.094, 6.966, 0.153, 0.772, 4.025,
+    2.406, 6.749, 7.507, 1.929, 0.095, 5.987,
+    6.327, 9.056, 2.758, 0.978, 2.360, 0.150,
+    1.974, 0.074
+};
+
+typedef struct {
+    char key_map[ALPHABET]; // ciphertext letter -> plaintext letter
+    double score;
+    char plaintext[MAX_LEN];
+} Candidate;
+
+void preprocess(const char *input, char *output) {
+    int j=0;
+    for(int i=0; input[i]; i++) {
+        if(isalpha(input[i])) {
+            output[j++] = tolower(input[i]);
+        }
+    }
+    output[j] = '\0';
+}
+
+void calc_freq(const char *text, double *freq) {
+    int counts[ALPHABET] = {0};
+    int len = strlen(text);
+    for(int i=0; i<len; i++) {
+        counts[text[i]-'a']++;
+    }
+    for(int i=0; i<ALPHABET; i++) {
+        freq[i] = (len > 0) ? (counts[i]*100.0/len) : 0.0;
+    }
+}
+
+// Sort ciphertext letters by decreasing frequency; output indices sorted by freq
+void sort_letters_by_freq(double *freq, int *order) {
+    for(int i=0; i<ALPHABET; i++) order[i] = i;
+
+    // simple selection sort descending
+    for(int i=0; i<ALPHABET-1; i++) {
+        int max_idx = i;
+        for(int j=i+1; j<ALPHABET; j++) {
+            if(freq[order[j]] > freq[order[max_idx]])
+                max_idx = j;
+        }
+        int temp = order[i];
+        order[i] = order[max_idx];
+        order[max_idx] = temp;
+    }
+}
+
+// Decrypt using key map
+void decrypt_with_key(const char *ciphertext, char *plaintext, const char *key_map) {
+    int len = strlen(ciphertext);
+    for(int i=0; i<len; i++) {
+        if(ciphertext[i] >= 'a' && ciphertext[i] <= 'z') {
+            plaintext[i] = key_map[ciphertext[i] - 'a'];
+        } else {
+            plaintext[i] = ciphertext[i];
+        }
+    }
+    plaintext[len] = '\0';
+}
+
+// Score plaintext by unigram frequency difference from English frequencies
+double score_plaintext(const char *plaintext) {
+    double freq[ALPHABET];
+    calc_freq(plaintext, freq);
+    double score = 0.0;
+    for(int i=0; i<ALPHABET; i++) {
+        double diff = freq[i] - english_freq[i];
+        score += diff*diff;
+    }
+    return score;
+}
+
+// Swap two characters in a mapping
+void swap_chars(char *map, int i, int j) {
+    char temp = map[i];
+    map[i] = map[j];
+    map[j] = temp;
+}
+
+int compare_candidates(const void *a, const void *b) {
+    Candidate *c1 = (Candidate *)a;
+    Candidate *c2 = (Candidate *)b;
+    if(c1->score < c2->score) return -1;
+    if(c1->score > c2->score) return 1;
+    return 0;
+}
+
+int main() {
+    char ciphertext[MAX_LEN];
+    char processed[MAX_LEN];
+    double freq[ALPHABET];
+    int order[ALPHABET];
+    Candidate candidates[MAX_CANDIDATES];
+    int top_n;
+
+    printf("Enter ciphertext: ");
+    if(!fgets(ciphertext, sizeof(ciphertext), stdin)) {
+        printf("Input error\n");
+        return 1;
+    }
+
+    preprocess(ciphertext, processed);
+
+    if(strlen(processed) == 0) {
+        printf("No letters to analyze.\n");
+        return 1;
+    }
+
+    printf("How many top plaintexts do you want (max %d)? ", MAX_CANDIDATES);
+    if(scanf("%d", &top_n) != 1 || top_n < 1 || top_n > MAX_CANDIDATES) {
+        printf("Invalid input, defaulting to %d\n", MAX_CANDIDATES);
+        top_n = MAX_CANDIDATES;
+    }
+
+    // Calculate freq of ciphertext letters
+    calc_freq(processed, freq);
+
+    // Sort ciphertext letters by frequency
+    sort_letters_by_freq(freq, order);
+
+    // Build initial key map by mapping freq ciphertext letters -> freq English letters
+    char base_key[ALPHABET];
+    for(int i=0; i<ALPHABET; i++) {
+        base_key[order[i]] = english_freq_order[i];
+    }
+
+    // Candidate 0: base mapping
+    memcpy(candidates[0].key_map, base_key, ALPHABET);
+    decrypt_with_key(processed, candidates[0].plaintext, candidates[0].key_map);
+    candidates[0].score = score_plaintext(candidates[0].plaintext);
+
+    // Generate variants by swapping letters in base key
+    // We'll produce (top_n-1) variants by swapping two letters
+    int cand_count = 1;
+    for(int i=0; i<ALPHABET && cand_count < top_n; i++) {
+        for(int j=i+1; j<ALPHABET && cand_count < top_n; j++) {
+            memcpy(candidates[cand_count].key_map, base_key, ALPHABET);
+            swap_chars(candidates[cand_count].key_map, i, j);
+            decrypt_with_key(processed, candidates[cand_count].plaintext, candidates[cand_count].key_map);
+            candidates[cand_count].score = score_plaintext(candidates[cand_count].plaintext);
+            cand_count++;
+        }
+    }
+
+    // Sort candidates by score (best match first)
+    qsort(candidates, cand_count, sizeof(Candidate), compare_candidates);
+
+    printf("\nTop %d possible plaintexts:\n", top_n);
+    for(int i=0; i<top_n && i < cand_count; i++) {
+        printf("Score: %.2f | Plaintext: %s\n", candidates[i].score, candidates[i].plaintext);
+    }
+
+    return 0;
+}
