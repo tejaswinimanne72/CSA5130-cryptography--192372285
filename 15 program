@@ -1,0 +1,122 @@
+#include <stdio.h>
+#include <string.h>
+#include <ctype.h>
+#include <stdlib.h>
+
+#define MAX_LEN 1024
+#define ALPHABET 26
+
+// English letter frequency (%)
+double english_freq[ALPHABET] = {
+    8.167, 1.492, 2.782, 4.253, 12.702, 2.228,
+    2.015, 6.094, 6.966, 0.153, 0.772, 4.025,
+    2.406, 6.749, 7.507, 1.929, 0.095, 5.987,
+    6.327, 9.056, 2.758, 0.978, 2.360, 0.150,
+    1.974, 0.074
+};
+
+typedef struct {
+    int key;
+    double score;       // Lower = better match
+    char plaintext[MAX_LEN];
+} Candidate;
+
+// Remove non-alphabet and convert to lowercase
+void preprocess(const char *input, char *output) {
+    int j = 0;
+    for (int i = 0; input[i]; i++) {
+        if (isalpha(input[i])) {
+            output[j++] = tolower(input[i]);
+        }
+    }
+    output[j] = '\0';
+}
+
+// Decrypt Caesar cipher with given key (shift)
+void decrypt_caesar(const char *ciphertext, int key, char *plaintext) {
+    int len = strlen(ciphertext);
+    for (int i = 0; i < len; i++) {
+        int c = ciphertext[i] - 'a';
+        int p = (c - key + ALPHABET) % ALPHABET;
+        plaintext[i] = 'a' + p;
+    }
+    plaintext[len] = '\0';
+}
+
+// Calculate letter frequencies (%)
+void calculate_freq(const char *text, double *freq) {
+    int len = strlen(text);
+    int counts[ALPHABET] = {0};
+
+    for (int i = 0; i < len; i++) {
+        counts[text[i] - 'a']++;
+    }
+
+    for (int i = 0; i < ALPHABET; i++) {
+        freq[i] = (len > 0) ? (counts[i] * 100.0 / len) : 0.0;
+    }
+}
+
+// Score frequency difference (sum squared errors)
+double score_freq(const double *freq) {
+    double sum = 0.0;
+    for (int i = 0; i < ALPHABET; i++) {
+        double diff = freq[i] - english_freq[i];
+        sum += diff * diff;
+    }
+    return sum;
+}
+
+// qsort comparator for ascending score
+int compare_candidates(const void *a, const void *b) {
+    Candidate *c1 = (Candidate *)a;
+    Candidate *c2 = (Candidate *)b;
+    if (c1->score < c2->score) return -1;
+    else if (c1->score > c2->score) return 1;
+    else return 0;
+}
+
+int main() {
+    char input[MAX_LEN], processed[MAX_LEN];
+    Candidate candidates[ALPHABET];
+    double freq[ALPHABET];
+    int top_n;
+
+    printf("Enter ciphertext: ");
+    if (!fgets(input, sizeof(input), stdin)) {
+        printf("Error reading input.\n");
+        return 1;
+    }
+
+    preprocess(input, processed);
+
+    if (strlen(processed) == 0) {
+        printf("No letters to analyze.\n");
+        return 1;
+    }
+
+    printf("Enter number of top plaintexts to display (1-26): ");
+    if (scanf("%d", &top_n) != 1 || top_n < 1 || top_n > ALPHABET) {
+        printf("Invalid number, defaulting to 10.\n");
+        top_n = 10;
+    }
+
+    // Try all 26 keys
+    for (int key = 0; key < ALPHABET; key++) {
+        decrypt_caesar(processed, key, candidates[key].plaintext);
+        calculate_freq(candidates[key].plaintext, freq);
+        candidates[key].score = score_freq(freq);
+        candidates[key].key = key;
+    }
+
+    // Sort candidates by score ascending
+    qsort(candidates, ALPHABET, sizeof(Candidate), compare_candidates);
+
+    printf("\nTop %d possible plaintexts:\n", top_n);
+    for (int i = 0; i < top_n; i++) {
+        printf("Key = %2d | Score = %.2f | Plaintext: %s\n",
+               candidates[i].key, candidates[i].score, candidates[i].plaintext);
+    }
+
+    return 0;
+}
