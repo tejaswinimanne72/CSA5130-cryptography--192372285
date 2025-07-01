@@ -1,0 +1,70 @@
+#include <stdio.h>
+#include <string.h>
+#include <openssl/evp.h>
+#include <openssl/rand.h>
+
+int main() {
+    // 3DES key (24 bytes) and IV (8 bytes)
+    unsigned char key[24] = "ThisIsA24ByteKeyFor3DES";
+    unsigned char iv[8] = "12345678";
+
+    // Plaintext
+    unsigned char plaintext[] = "Simple 3DES CBC Encryption";
+    unsigned char ciphertext[128];
+    unsigned char decryptedtext[128];
+    int len, ciphertext_len, decryptedtext_len;
+
+    printf("Plaintext: %s\n", plaintext);
+
+    // Create context for encryption
+    EVP_CIPHER_CTX *ctx = EVP_CIPHER_CTX_new();
+    if (!ctx) {
+        printf("Error creating context.\n");
+        return 1;
+    }
+
+    // Initialize Encryption
+    EVP_EncryptInit_ex(ctx, EVP_des_ede3_cbc(), NULL, key, iv);
+
+    // Perform Encryption
+    EVP_EncryptUpdate(ctx, ciphertext, &len, plaintext, strlen((char*)plaintext));
+    ciphertext_len = len;
+
+    EVP_EncryptFinal_ex(ctx, ciphertext + len, &len);
+    ciphertext_len += len;
+
+    printf("Ciphertext (hex): ");
+    for (int i = 0; i < ciphertext_len; i++)
+        printf("%02X", ciphertext[i]);
+    printf("\n");
+
+    // Cleanup Encryption context
+    EVP_CIPHER_CTX_free(ctx);
+
+    // Create context for decryption
+    ctx = EVP_CIPHER_CTX_new();
+    if (!ctx) {
+        printf("Error creating context.\n");
+        return 1;
+    }
+
+    // Initialize Decryption
+    EVP_DecryptInit_ex(ctx, EVP_des_ede3_cbc(), NULL, key, iv);
+
+    // Perform Decryption
+    EVP_DecryptUpdate(ctx, decryptedtext, &len, ciphertext, ciphertext_len);
+    decryptedtext_len = len;
+
+    EVP_DecryptFinal_ex(ctx, decryptedtext + len, &len);
+    decryptedtext_len += len;
+
+    // Null terminate decrypted text
+    decryptedtext[decryptedtext_len] = '\0';
+
+    printf("Decrypted text: %s\n", decryptedtext);
+
+    // Cleanup
+    EVP_CIPHER_CTX_free(ctx);
+
+    return 0;
+}
