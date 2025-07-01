@@ -1,0 +1,73 @@
+#include <stdio.h>
+#include <string.h>
+
+#define BLOCK_SIZE 8
+
+// Simple XOR "encryption" for demo purposes
+void simple_encrypt(unsigned char *input, unsigned char *output, unsigned char *key) {
+    for (int i = 0; i < BLOCK_SIZE; i++)
+        output[i] = input[i] ^ key[i];
+}
+
+// Simple XOR "decryption" (same as encryption for XOR)
+void simple_decrypt(unsigned char *input, unsigned char *output, unsigned char *key) {
+    for (int i = 0; i < BLOCK_SIZE; i++)
+        output[i] = input[i] ^ key[i];
+}
+
+// Introduce bit error in ciphertext
+void introduce_error(unsigned char *data, int index) {
+    data[index] ^= 0x01;
+}
+
+int main() {
+    unsigned char key[BLOCK_SIZE] = "MyKey123";
+    unsigned char iv[BLOCK_SIZE]  = "InitVect";
+    unsigned char plaintext[2 * BLOCK_SIZE] = "BlockOneBlockTwo";
+    unsigned char ciphertext[2 * BLOCK_SIZE];
+    unsigned char decrypted[2 * BLOCK_SIZE];
+
+    printf("Original Plaintext: %s\n", plaintext);
+
+    // --------- ECB Mode ---------
+    printf("\n=== ECB MODE ===\n");
+    simple_encrypt(plaintext, ciphertext, key);
+    simple_encrypt(plaintext + BLOCK_SIZE, ciphertext + BLOCK_SIZE, key);
+
+    introduce_error(ciphertext, 0);  // Error in first block
+
+    simple_decrypt(ciphertext, decrypted, key);
+    simple_decrypt(ciphertext + BLOCK_SIZE, decrypted + BLOCK_SIZE, key);
+
+    printf("Decrypted with Error (ECB): %.*s\n", 2 * BLOCK_SIZE, decrypted);
+
+    // --------- CBC Mode ---------
+    printf("\n=== CBC MODE ===\n");
+    unsigned char prev[BLOCK_SIZE];
+    memcpy(prev, iv, BLOCK_SIZE);
+
+    // Encryption
+    for (int i = 0; i < 2 * BLOCK_SIZE; i += BLOCK_SIZE) {
+        unsigned char temp[BLOCK_SIZE];
+        for (int j = 0; j < BLOCK_SIZE; j++)
+            temp[j] = plaintext[i + j] ^ prev[j];
+        simple_encrypt(temp, ciphertext + i, key);
+        memcpy(prev, ciphertext + i, BLOCK_SIZE);
+    }
+
+    introduce_error(ciphertext, 0);  // Error in first ciphertext block
+
+    // Decryption
+    memcpy(prev, iv, BLOCK_SIZE);
+    for (int i = 0; i < 2 * BLOCK_SIZE; i += BLOCK_SIZE) {
+        unsigned char temp[BLOCK_SIZE];
+        simple_decrypt(ciphertext + i, temp, key);
+        for (int j = 0; j < BLOCK_SIZE; j++)
+            decrypted[i + j] = temp[j] ^ prev[j];
+        memcpy(prev, ciphertext + i, BLOCK_SIZE);
+    }
+
+    printf("Decrypted with Error (CBC): %.*s\n", 2 * BLOCK_SIZE, decrypted);
+
+    return 0;
+}
