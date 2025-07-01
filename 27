@@ -1,0 +1,59 @@
+#include <stdio.h>
+#include <string.h>
+
+// Function for modular exponentiation
+long long mod_pow(long long base, long long exp, long long mod) {
+    long long result = 1;
+    base = base % mod;
+    while (exp > 0) {
+        if (exp % 2 == 1)
+            result = (result * base) % mod;
+        exp = exp >> 1;
+        base = (base * base) % mod;
+    }
+    return result;
+}
+
+int char_to_int(char c) {
+    if (c >= 'A' && c <= 'Z')
+        return c - 'A';
+    return -1;
+}
+
+char int_to_char(int x) {
+    if (x >= 0 && x <= 25)
+        return (char)(x + 'A');
+    return '?';
+}
+
+int main() {
+    // Example small RSA parameters (In real RSA, n is very large)
+    long long e = 17;
+    long long d = 413;
+    long long n = 589;
+
+    char message[] = "HELLO";
+    printf("Original Message: %s\n", message);
+
+    long long encrypted[100];
+    int length = strlen(message);
+
+    printf("Encrypted Message: ");
+    for (int i = 0; i < length; i++) {
+        int num = char_to_int(message[i]);
+        if (num >= 0) {
+            encrypted[i] = mod_pow(num, e, n);
+            printf("%lld ", encrypted[i]);
+        }
+    }
+    printf("\n");
+
+    printf("Decrypted Message: ");
+    for (int i = 0; i < length; i++) {
+        long long decrypted_num = mod_pow(encrypted[i], d, n);
+        printf("%c", int_to_char(decrypted_num));
+    }
+    printf("\n");
+
+    return 0;
+}
