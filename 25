@@ -1,0 +1,35 @@
+#include <stdio.h>
+
+// Function to compute GCD using Euclidean Algorithm
+long long gcd(long long a, long long b) {
+    while (b != 0) {
+        long long temp = b;
+        b = a % b;
+        a = temp;
+    }
+    return a;
+}
+
+int main() {
+    // Example RSA public key components
+    long long n = 3599;   // n = p × q = 59 × 61 (from previous examples)
+    long long e = 31;
+
+    // Suppose an attacker knows a plaintext block with a common factor with n
+    long long plaintext_block = 59;  // In reality, attacker only knows this block
+
+    printf("Public Key (e, n): (%lld, %lld)\n", e, n);
+    printf("Known plaintext block: %lld\n", plaintext_block);
+
+    long long factor = gcd(plaintext_block, n);
+
+    if (factor != 1 && factor != n) {
+        printf("Non-trivial factor of n found: %lld\n", factor);
+        printf("Other prime factor is: %lld\n", n / factor);
+        printf("RSA is compromised.\n");
+    } else {
+        printf("No useful information gained from this plaintext block.\n");
+    }
+
+    return 0;
+}
