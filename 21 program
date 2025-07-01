@@ -1,0 +1,69 @@
+#include <stdio.h>
+#include <string.h>
+#include <openssl/blowfish.h>
+#include <openssl/rand.h>
+
+#define BLOCK_SIZE 8  // Blowfish block size
+
+// Padding function: Adds '1' bit followed by '0's to complete block
+int pad_message(unsigned char *input, int len, unsigned char *output) {
+    memcpy(output, input, len);
+    int padding = BLOCK_SIZE - (len % BLOCK_SIZE);
+    if (padding == 0) padding = BLOCK_SIZE; // Always add padding
+    output[len] = 0x80; // 10000000 in binary (adds the '1' bit)
+    for (int i = 1; i < padding; i++)
+        output[len + i] = 0x00;
+    return len + padding;
+}
+
+void print_hex(const char *label, unsigned char *data, int len) {
+    printf("%s: ", label);
+    for (int i = 0; i < len; i++)
+        printf("%02X", data[i]);
+    printf("\n");
+}
+
+int main() {
+    unsigned char key[] = "SecretKey";
+    unsigned char iv[BLOCK_SIZE];
+    RAND_bytes(iv, BLOCK_SIZE);
+
+    // Plaintext
+    unsigned char plaintext[] = "This is 16 bytes";
+    unsigned char padded_plaintext[128] = {0};
+    int padded_len = pad_message(plaintext, strlen((char*)plaintext), padded_plaintext);
+
+    unsigned char ciphertext[128] = {0};
+    unsigned char decrypted[128] = {0};
+
+    BF_KEY bf_key;
+    BF_set_key(&bf_key, strlen((char*)key), key);
+
+    printf("=== CBC Mode ===\n");
+    unsigned char iv_copy[BLOCK_SIZE];
+    memcpy(iv_copy, iv, BLOCK_SIZE);
+
+    BF_cbc_encrypt(padded_plaintext, ciphertext, padded_len, &bf_key, iv_copy, BF_ENCRYPT);
+    print_hex("Ciphertext", ciphertext, padded_len);
+
+    memcpy(iv_copy, iv, BLOCK_SIZE);
+    BF_cbc_encrypt(ciphertext, decrypted, padded_len, &bf_key, iv_copy, BF_DECRYPT);
+    print_hex("Decrypted", decrypted, padded_len);
+    printf("\n");
+
+    printf("=== CFB Mode (8-bit segments) ===\n");
+    memset(ciphertext, 0, sizeof(ciphertext));
+    memset(decrypted, 0, sizeof(decrypted));
+    memcpy(iv_copy, iv, BLOCK_SIZE);
+
+    int num = 0;
+    BF_cfb64_encrypt(padded_plaintext, ciphertext, padded_len, &bf_key, iv_copy, &num, BF_ENCRYPT);
+    print_hex("Ciphertext", ciphertext, padded_len);
+
+    memcpy(iv_copy, iv, BLOCK_SIZE);
+    num = 0;
+    BF_cfb64_encrypt(ciphertext, decrypted, padded_len, &bf_key, iv_copy, &num, BF_DECRYPT);
+    print_hex("Decrypted", decrypted, padded_len);
+
+    return 0;
+}
