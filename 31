@@ -1,0 +1,102 @@
+#include <stdio.h>
+#include <stdint.h>
+#include <string.h>
+
+// Constants for different block sizes
+#define CONSTANT_64BIT  0x1B  // For 64-bit block ciphers (like DES)
+#define CONSTANT_128BIT 0x87  // For 128-bit block ciphers (like AES)
+
+// Simulate block cipher encryption (using all zeros as input)
+void block_cipher_encrypt(const uint8_t *key, const uint8_t *input, uint8_t *output, size_t block_size) {
+    // In real implementation, this would be AES or another block cipher
+    // For demonstration, we'll just copy the input (since we're encrypting zeros)
+    memcpy(output, input, block_size);
+}
+
+// Generate CMAC subkeys
+void generate_subkeys(const uint8_t *key, size_t block_size, uint8_t *k1, uint8_t *k2) {
+    uint8_t L[block_size];
+    uint8_t const_Rb;
+    
+    // Set the constant based on block size
+    if (block_size == 8) { // 64 bits
+        const_Rb = CONSTANT_64BIT;
+    } else { // 128 bits
+        const_Rb = CONSTANT_128BIT;
+    }
+    
+    // Step 1: Encrypt zero block
+    uint8_t zero_block[block_size];
+    memset(zero_block, 0, block_size);
+    block_cipher_encrypt(key, zero_block, L, block_size);
+    
+    // Step 2: Derive first subkey K1
+    int msb = (L[0] >> 7) & 1;  // Check most significant bit
+    
+    // Left shift
+    for (size_t i = 0; i < block_size; i++) {
+        k1[i] = L[i] << 1;
+        if (i < block_size - 1) {
+            k1[i] |= (L[i+1] >> 7) & 1;
+        }
+    }
+    
+    // Conditional XOR
+    if (msb) {
+        k1[block_size-1] ^= const_Rb;
+    }
+    
+    // Step 3: Derive second subkey K2 from K1
+    msb = (k1[0] >> 7) & 1;  // Check most significant bit
+    
+    // Left shift
+    for (size_t i = 0; i < block_size; i++) {
+        k2[i] = k1[i] << 1;
+        if (i < block_size - 1) {
+            k2[i] |= (k1[i+1] >> 7) & 1;
+        }
+    }
+    
+    // Conditional XOR
+    if (msb) {
+        k2[block_size-1] ^= const_Rb;
+    }
+}
+
+void print_hex(const char *label, const uint8_t *data, size_t len) {
+    printf("%s: ", label);
+    for (size_t i = 0; i < len; i++) {
+        printf("%02x", data[i]);
+    }
+    printf("\n");
+}
+
+int main() {
+    // Example key (in practice, this would be your encryption key)
+    uint8_t key_128[16] = {0};  // 128-bit key
+    uint8_t key_64[8] = {0};    // 64-bit key
+    
+    // Buffers for subkeys
+    uint8_t k1_128[16], k2_128[16];  // 128-bit subkeys
+    uint8_t k1_64[8], k2_64[8];      // 64-bit subkeys
+    
+    // Generate subkeys for 128-bit block size (AES)
+    generate_subkeys(key_128, 16, k1_128, k2_128);
+    
+    // Generate subkeys for 64-bit block size (DES)
+    generate_subkeys(key_64, 8, k1_64, k2_64);
+    
+    // Print results
+    printf("128-bit block size (AES-like):\n");
+    print_hex("L (encrypted zero block)", key_128, 16); // In our simulation L=0
+    print_hex("First subkey K1", k1_128, 16);
+    print_hex("Second subkey K2", k2_128, 16);
+    printf("\n");
+    
+    printf("64-bit block size (DES-like):\n");
+    print_hex("L (encrypted zero block)", key_64, 8); // In our simulation L=0
+    print_hex("First subkey K1", k1_64, 8);
+    print_hex("Second subkey K2", k2_64, 8);
+    
+    return 0;
+}
