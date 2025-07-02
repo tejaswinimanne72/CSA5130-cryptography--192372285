@@ -1,0 +1,138 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <openssl/dsa.h>
+#include <openssl/rsa.h>
+#include <openssl/sha.h>
+#include <openssl/err.h>
+#include <openssl/bn.h>
+
+#define MESSAGE "This message will be signed multiple times"
+
+void handle_openssl_error(const char* msg) {
+    fprintf(stderr, "Error: %s\n", msg);
+    ERR_print_errors_fp(stderr);
+    exit(1);
+}
+
+void print_bignum(const char* label, const BIGNUM* num) {
+    char* hex = BN_bn2hex(num);
+    printf("%s: %s\n", label, hex);
+    OPENSSL_free(hex);
+}
+
+void print_signature(const char* label, const unsigned char* sig, unsigned int len) {
+    printf("%s (%d bytes): ", label, len);
+    for (unsigned int i = 0; i < len; i++) {
+        printf("%02x", sig[i]);
+    }
+    printf("\n");
+}
+
+void dsa_signature_demo() {
+    printf("\n=== DSA Signature Demo ===\n");
+    printf("Signing message: \"%s\"\n\n", MESSAGE);
+
+    // Generate DSA parameters and key
+    DSA* dsa = DSA_new();
+    if (!DSA_generate_parameters_ex(dsa, 2048, NULL, 0, NULL, NULL, NULL)) {
+        handle_openssl_error("Failed to generate DSA parameters");
+    }
+    if (!DSA_generate_key(dsa)) {
+        handle_openssl_error("Failed to generate DSA key");
+    }
+
+    // Hash the message
+    unsigned char hash[SHA256_DIGEST_LENGTH];
+    SHA256((const unsigned char*)MESSAGE, strlen(MESSAGE), hash);
+
+    // Sign the message twice with DSA
+    DSA_SIG* sig1 = DSA_do_sign(hash, SHA256_DIGEST_LENGTH, dsa);
+    DSA_SIG* sig2 = DSA_do_sign(hash, SHA256_DIGEST_LENGTH, dsa);
+    
+    if (!sig1 || !sig2) {
+        handle_openssl_error("Failed to generate DSA signatures");
+    }
+
+    printf("First DSA Signature:\n");
+    print_bignum("  r", sig1->r);
+    print_bignum("  s", sig1->s);
+    
+    printf("\nSecond DSA Signature (same message):\n");
+    print_bignum("  r", sig2->r);
+    print_bignum("  s", sig2->s);
+
+    // Verify the signatures differ
+    if (BN_cmp(sig1->r, sig2->r) == 0 && BN_cmp(sig1->s, sig2->s) == 0) {
+        printf("\nWARNING: DSA signatures are identical (should be different!)\n");
+    } else {
+        printf("\nDSA signatures differ as expected\n");
+    }
+
+    // Cleanup
+    DSA_SIG_free(sig1);
+    DSA_SIG_free(sig2);
+    DSA_free(dsa);
+}
+
+void rsa_signature_demo() {
+    printf("\n=== RSA Signature Demo ===\n");
+    printf("Signing message: \"%s\"\n\n", MESSAGE);
+
+    // Generate RSA key
+    RSA* rsa = RSA_new();
+    BIGNUM* e = BN_new();
+    BN_set_word(e, 65537);
+    if (!RSA_generate_key_ex(rsa, 2048, e, NULL)) {
+        handle_openssl_error("Failed to generate RSA key");
+    }
+    BN_free(e);
+
+    // Hash the message
+    unsigned char hash[SHA256_DIGEST_LENGTH];
+    SHA256((const unsigned char*)MESSAGE, strlen(MESSAGE), hash);
+
+    // Sign the message twice with RSA
+    unsigned char sig1[256], sig2[256];
+    unsigned int siglen1, siglen2;
+    
+    if (!RSA_sign(NID_sha256, hash, SHA256_DIGEST_LENGTH, sig1, &siglen1, rsa)) {
+        handle_openssl_error("Failed to generate first RSA signature");
+    }
+    if (!RSA_sign(NID_sha256, hash, SHA256_DIGEST_LENGTH, sig2, &siglen2, rsa)) {
+        handle_openssl_error("Failed to generate second RSA signature");
+    }
+
+    printf("First RSA Signature:\n");
+    print_signature("  Signature", sig1, siglen1);
+    
+    printf("\nSecond RSA Signature (same message):\n");
+    print_signature("  Signature", sig2, siglen2);
+
+    // Verify the signatures are identical
+    if (siglen1 == siglen2 && memcmp(sig1, sig2, siglen1) == 0) {
+        printf("\nRSA signatures are identical as expected\n");
+    } else {
+        printf("\nWARNING: RSA signatures differ (should be identical!)\n");
+    }
+
+    // Cleanup
+    RSA_free(rsa);
+}
+
+int main() {
+    // Initialize OpenSSL
+    OpenSSL_add_all_algorithms();
+    ERR_load_crypto_strings();
+
+    // Run demos
+    dsa_signature_demo();
+    rsa_signature_demo();
+
+    // Cleanup
+    EVP_cleanup();
+    CRYPTO_cleanup_all_ex_data();
+    ERR_free_strings();
+
+    return 0;
+}
