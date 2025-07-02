@@ -1,0 +1,214 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <ctype.h>
+#include <math.h>
+
+#define NUM_LETTERS 26
+#define MAX_PLAINTEXTS 50
+#define BUFFER_SIZE 4096
+
+// English letter frequencies (from highest to lowest)
+const char *english_freq_order = "etaoinshrdlcumwfgypbvkjxqz";
+const float english_freq[NUM_LETTERS] = {
+    8.167, 1.492, 2.782, 4.253, 12.702, 2.228, 2.015, 6.094, 6.966, 
+    0.153, 0.772, 4.025, 2.406, 6.749, 7.507, 1.929, 0.095, 5.987, 
+    6.327, 9.056, 2.758, 0.978, 2.360, 0.150, 1.974, 0.074
+};
+
+typedef struct {
+    char letter;
+    int count;
+} LetterCount;
+
+typedef struct {
+    char cipher_char;
+    char plain_char;
+} Substitution;
+
+int compare_letter_count(const void *a, const void *b) {
+    LetterCount *lc1 = (LetterCount *)a;
+    LetterCount *lc2 = (LetterCount *)b;
+    return lc2->count - lc1->count; // Descending order
+}
+
+void count_letters(const char *text, LetterCount *counts) {
+    for (int i = 0; i < NUM_LETTERS; i++) {
+        counts[i].letter = 'a' + i;
+        counts[i].count = 0;
+    }
+
+    for (int i = 0; text[i]; i++) {
+        if (isalpha(text[i])) {
+            char c = tolower(text[i]);
+            counts[c - 'a'].count++;
+        }
+    }
+}
+
+void get_frequency_order(const LetterCount *counts, char *freq_order) {
+    LetterCount temp[NUM_LETTERS];
+    memcpy(temp, counts, sizeof(temp));
+    
+    qsort(temp, NUM_LETTERS, sizeof(LetterCount), compare_letter_count);
+    
+    for (int i = 0; i < NUM_LETTERS; i++) {
+        freq_order[i] = temp[i].letter;
+    }
+    freq_order[NUM_LETTERS] = '\0';
+}
+
+void generate_substitutions(const char *cipher_freq, Substitution *subs) {
+    int cipher_len = strlen(cipher_freq);
+    int english_len = strlen(english_freq_order);
+    int len = cipher_len < english_len ? cipher_len : english_len;
+    
+    for (int i = 0; i < len; i++) {
+        subs[i].cipher_char = cipher_freq[i];
+        subs[i].plain_char = english_freq_order[i];
+    }
+}
+
+void apply_substitution(const char *ciphertext, const Substitution *subs, int subs_count, char *plaintext) {
+    // Initialize plaintext as copy of ciphertext
+    strcpy(plaintext, ciphertext);
+    
+    // Create a full substitution table (initialized to identity)
+    char sub_table[NUM_LETTERS];
+    for (int i = 0; i < NUM_LETTERS; i++) {
+        sub_table[i] = 'a' + i;
+    }
+    
+    // Apply the substitutions we know
+    for (int i = 0; i < subs_count; i++) {
+        char cipher_char = tolower(subs[i].cipher_char);
+        char plain_char = tolower(subs[i].plain_char);
+        sub_table[cipher_char - 'a'] = plain_char;
+    }
+    
+    // Apply the substitution table to the plaintext
+    for (int i = 0; plaintext[i]; i++) {
+        if (isalpha(plaintext[i])) {
+            char original = tolower(plaintext[i]);
+            char substituted = sub_table[original - 'a'];
+            plaintext[i] = isupper(plaintext[i]) ? toupper(substituted) : substituted;
+        }
+    }
+}
+
+double score_plaintext(const char *text) {
+    LetterCount counts[NUM_LETTERS];
+    count_letters(text, counts);
+    
+    double score = 0.0;
+    int total_letters = 0;
+    
+    for (int i = 0; i < NUM_LETTERS; i++) {
+        total_letters += counts[i].count;
+    }
+    
+    if (total_letters == 0) return 0.0;
+    
+    for (int i = 0; i < NUM_LETTERS; i++) {
+        double observed_freq = (double)counts[i].count / total_letters * 100;
+        double expected_freq = english_freq[i];
+        double diff = observed_freq - expected_freq;
+        score += -diff * diff; // Negative squared difference (higher is better)
+    }
+    
+    // Bonus for common words
+    const char *common_words[] = {"the", "and", "that", "have", "for", "not", "with"};
+    for (int i = 0; i < sizeof(common_words)/sizeof(common_words[0]); i++) {
+        if (strstr(text, common_words[i])) {
+            score += 5.0;
+        }
+    }
+    
+    return score;
+}
+
+void generate_plaintexts(const char *ciphertext, char plaintexts[][BUFFER_SIZE], int *num_plaintexts, int top_n) {
+    LetterCount counts[NUM_LETTERS];
+    count_letters(ciphertext, counts);
+    
+    char cipher_freq[NUM_LETTERS + 1];
+    get_frequency_order(counts, cipher_freq);
+    
+    Substitution subs[NUM_LETTERS];
+    generate_substitutions(cipher_freq, subs);
+    
+    // We'll try different numbers of substitutions from 1 to NUM_LETTERS
+    *num_plaintexts = 0;
+    double scores[MAX_PLAINTEXTS] = {0};
+    
+    for (int n = 1; n <= NUM_LETTERS && *num_plaintexts < MAX_PLAINTEXTS; n++) {
+        char current_plain[BUFFER_SIZE];
+        apply_substitution(ciphertext, subs, n, current_plain);
+        
+        // Check if we already have this plaintext
+        int duplicate = 0;
+        for (int i = 0; i < *num_plaintexts; i++) {
+            if (strcmp(plaintexts[i], current_plain) == 0) {
+                duplicate = 1;
+                break;
+            }
+        }
+        
+        if (!duplicate) {
+            double score = score_plaintext(current_plain);
+            
+            // Insert in order of score
+            int insert_pos = *num_plaintexts;
+            for (int i = 0; i < *num_plaintexts; i++) {
+                if (score > scores[i]) {
+                    insert_pos = i;
+                    break;
+                }
+            }
+            
+            if (*num_plaintexts < MAX_PLAINTEXTS) {
+                // Shift existing plaintexts down
+                for (int i = MAX_PLAINTEXTS - 1; i > insert_pos; i--) {
+                    strcpy(plaintexts[i], plaintexts[i-1]);
+                    scores[i] = scores[i-1];
+                }
+                
+                strcpy(plaintexts[insert_pos], current_plain);
+                scores[insert_pos] = score;
+                (*num_plaintexts)++;
+            }
+        }
+    }
+    
+    // Limit to top_n results
+    if (*num_plaintexts > top_n) {
+        *num_plaintexts = top_n;
+    }
+}
+
+int main() {
+    char ciphertext[BUFFER_SIZE];
+    char plaintexts[MAX_PLAINTEXTS][BUFFER_SIZE];
+    int num_plaintexts = 0;
+    int top_n = 10;
+    
+    printf("Enter ciphertext: ");
+    fgets(ciphertext, BUFFER_SIZE, stdin);
+    ciphertext[strcspn(ciphertext, "\n")] = '\0'; // Remove newline
+    
+    printf("Enter number of possible plaintexts to generate (1-%d): ", MAX_PLAINTEXTS);
+    scanf("%d", &top_n);
+    if (top_n < 1 || top_n > MAX_PLAINTEXTS) {
+        top_n = 10;
+        printf("Invalid input. Using default value of 10.\n");
+    }
+    
+    generate_plaintexts(ciphertext, plaintexts, &num_plaintexts, top_n);
+    
+    printf("\nTop %d possible plaintexts:\n", top_n);
+    for (int i = 0; i < num_plaintexts; i++) {
+        printf("%2d. %s\n", i+1, plaintexts[i]);
+    }
+    
+    return 0;
+}
