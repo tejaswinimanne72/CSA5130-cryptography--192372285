@@ -1,0 +1,122 @@
+#include <stdio.h>
+#include <stdint.h>
+#include <string.h>
+#include <stdbool.h>
+
+#define LANE_SIZE 64       // 64-bit lanes
+#define STATE_SIZE 1600    // 1600-bit state
+#define STATE_LANES (STATE_SIZE/LANE_SIZE)  // 25 lanes (5x5)
+#define RATE 1024          // 1024-bit block size
+#define CAPACITY (STATE_SIZE - RATE)  // 576-bit capacity
+#define LANES_IN_RATE (RATE/LANE_SIZE)  // 16 lanes
+#define LANES_IN_CAPACITY (CAPACITY/LANE_SIZE)  // 9 lanes
+
+typedef uint64_t lane_t;
+
+// SHA-3 state with tracking of originally-zero capacity lanes
+typedef struct {
+    lane_t A[5][5];  // State matrix (5x5 lanes)
+    bool was_zero[5][5];  // Tracks which lanes were originally in capacity
+} sha3_state;
+
+// Initialize the state with rate and capacity properly set
+void initialize_state(sha3_state *state) {
+    // All lanes start as zero
+    memset(state->A, 0, sizeof(state->A));
+    
+    // Mark capacity lanes as originally zero
+    // In SHA-3, capacity is the portion not used for absorbing input
+    // For 1024-bit rate, this is the last 576 bits (9 lanes)
+    // We'll consider the lanes in row-major order for capacity
+    
+    int capacity_lanes_marked = 0;
+    memset(state->was_zero, 0, sizeof(state->was_zero));
+    
+    for (int y = 0; y < 5; y++) {
+        for (int x = 0; x < 5; x++) {
+            if (capacity_lanes_marked < LANES_IN_CAPACITY) {
+                state->was_zero[y][x] = true;
+                capacity_lanes_marked++;
+            }
+        }
+    }
+}
+
+// Simulate absorbing a message block (just XOR without permutation)
+void absorb_block(sha3_state *state, const lane_t *message) {
+    // XOR message into the rate portion (first LANES_IN_RATE lanes in row-major order)
+    int rate_lanes_processed = 0;
+    
+    for (int y = 0; y < 5 && rate_lanes_processed < LANES_IN_RATE; y++) {
+        for (int x = 0; x < 5 && rate_lanes_processed < LANES_IN_RATE; x++) {
+            state->A[y][x] ^= message[rate_lanes_processed];
+            
+            // If this lane was originally zero (capacity) and now has a non-zero value
+            if (state->was_zero[y][x] && state->A[y][x] != 0) {
+                state->was_zero[y][x] = false;
+            }
+            
+            rate_lanes_processed++;
+        }
+    }
+}
+
+// Check if all originally-zero (capacity) lanes have become non-zero
+bool all_non_zero(const sha3_state *state) {
+    for (int y = 0; y < 5; y++) {
+        for (int x = 0; x < 5; x++) {
+            if (state->was_zero[y][x]) {
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
+int main() {
+    sha3_state state;
+    initialize_state(&state);
+    
+    // Create a message block where every lane has at least one non-zero bit
+    lane_t message[LANES_IN_RATE];
+    for (int i = 0; i < LANES_IN_RATE; i++) {
+        message[i] = 1UL << (i % LANE_SIZE);  // Each lane has a different bit set
+    }
+    
+    int blocks_processed = 0;
+    
+    printf("Starting diffusion analysis...\n");
+    printf("Initial state: 9 capacity lanes (originally zero)\n");
+    
+    while (!all_non_zero(&state)) {
+        absorb_block(&state, message);
+        blocks_processed++;
+        
+        // Count remaining originally-zero lanes
+        int remaining_zero = 0;
+        for (int y = 0; y < 5; y++) {
+            for (int x = 0; x < 5; x++) {
+                if (state.was_zero[y][x]) remaining_zero++;
+            }
+        }
+        
+        printf("After block %d: %d originally-zero lanes remain\n", 
+               blocks_processed, remaining_zero);
+        
+        // Safety check
+        if (blocks_processed > 100) {
+            printf("Safety limit reached (100 blocks)\n");
+            break;
+        }
+    }
+    
+    if (all_non_zero(&state)) {
+        printf("\nAll originally-zero lanes became non-zero after %d blocks\n", 
+               blocks_processed);
+    } else {
+        printf("\nNot all originally-zero lanes became non-zero after %d blocks\n",
+               blocks_processed);
+    }
+    
+    return 0;
+}
