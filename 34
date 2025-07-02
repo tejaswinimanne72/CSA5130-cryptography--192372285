@@ -1,0 +1,196 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <stdint.h>
+
+#define BLOCK_SIZE 8 // 64-bit blocks for DES (8 bytes)
+#define SEGMENT_SIZE 4 // 32-bit segments for CFB (4 bytes)
+
+// Simulated block cipher encryption (in practice use AES/DES)
+void block_cipher_encrypt(const uint8_t *input, uint8_t *output, const uint8_t *key) {
+    // In real implementation, this would be AES or DES encryption
+    // For demo purposes, we'll use a simple XOR with key
+    for (int i = 0; i < BLOCK_SIZE; i++) {
+        output[i] = input[i] ^ key[i % 8];
+    }
+}
+
+// PKCS#7 style padding (modified as per problem requirements)
+void pad_data(uint8_t **data, size_t *data_len, int block_size) {
+    // Calculate padding needed (1 bit followed by 0 bits)
+    size_t original_len = *data_len;
+    size_t padding_needed = block_size - (original_len % block_size);
+    
+    // Always pad (even if no padding needed)
+    if (padding_needed == 0) {
+        padding_needed = block_size;
+    }
+    
+    // Allocate memory for padded data
+    uint8_t *padded_data = malloc(original_len + padding_needed);
+    memcpy(padded_data, *data, original_len);
+    
+    // Add padding: 1 bit followed by 0 bits
+    padded_data[original_len] = 0x80; // 10000000 in binary
+    for (size_t i = original_len + 1; i < original_len + padding_needed; i++) {
+        padded_data[i] = 0x00;
+    }
+    
+    // Update output parameters
+    *data = padded_data;
+    *data_len = original_len + padding_needed;
+}
+
+// Remove padding
+void unpad_data(uint8_t **data, size_t *data_len) {
+    // Find the padding start (first 0x80 byte from end)
+    size_t i = *data_len - 1;
+    while (i > 0 && (*data)[i] != 0x80) {
+        i--;
+    }
+    
+    *data_len = i;
+    uint8_t *unpadded_data = malloc(i);
+    memcpy(unpadded_data, *data, i);
+    *data = unpadded_data;
+}
+
+// ECB Mode Encryption
+void ecb_encrypt(const uint8_t *plaintext, size_t pt_len, uint8_t *ciphertext, const uint8_t *key) {
+    for (size_t i = 0; i < pt_len; i += BLOCK_SIZE) {
+        block_cipher_encrypt(plaintext + i, ciphertext + i, key);
+    }
+}
+
+// CBC Mode Encryption
+void cbc_encrypt(const uint8_t *plaintext, size_t pt_len, uint8_t *ciphertext, 
+                 const uint8_t *key, const uint8_t *iv) {
+    uint8_t previous_block[BLOCK_SIZE];
+    memcpy(previous_block, iv, BLOCK_SIZE);
+    
+    for (size_t i = 0; i < pt_len; i += BLOCK_SIZE) {
+        // XOR with previous ciphertext block (or IV for first block)
+        uint8_t xored[BLOCK_SIZE];
+        for (int j = 0; j < BLOCK_SIZE; j++) {
+            xored[j] = plaintext[i + j] ^ previous_block[j];
+        }
+        
+        // Encrypt the result
+        block_cipher_encrypt(xored, ciphertext + i, key);
+        
+        // Save this ciphertext block for next iteration
+        memcpy(previous_block, ciphertext + i, BLOCK_SIZE);
+    }
+}
+
+// CFB Mode Encryption (using segments smaller than block size)
+void cfb_encrypt(const uint8_t *plaintext, size_t pt_len, uint8_t *ciphertext, 
+                 const uint8_t *key, const uint8_t *iv) {
+    uint8_t shift_register[BLOCK_SIZE];
+    memcpy(shift_register, iv, BLOCK_SIZE);
+    
+    for (size_t i = 0; i < pt_len; i += SEGMENT_SIZE) {
+        // Encrypt the shift register
+        uint8_t encrypted_block[BLOCK_SIZE];
+        block_cipher_encrypt(shift_register, encrypted_block, key);
+        
+        // XOR leftmost segment with plaintext
+        for (int j = 0; j < SEGMENT_SIZE; j++) {
+            ciphertext[i + j] = plaintext[i + j] ^ encrypted_block[j];
+        }
+        
+        // Shift the register left by segment size and add ciphertext
+        memmove(shift_register, shift_register + SEGMENT_SIZE, BLOCK_SIZE - SEGMENT_SIZE);
+        memcpy(shift_register + BLOCK_SIZE - SEGMENT_SIZE, ciphertext + i, SEGMENT_SIZE);
+    }
+}
+
+void print_hex(const char *label, const uint8_t *data, size_t len) {
+    printf("%s: ", label);
+    for (size_t i = 0; i < len; i++) {
+        printf("%02x ", data[i]);
+    }
+    printf("\n");
+}
+
+int main() {
+    // Example data (not a multiple of block size)
+    const char *message = "Hello world! This is a test message.";
+    size_t original_len = strlen(message);
+    
+    // Make a copy we can pad
+    uint8_t *data = malloc(original_len);
+    memcpy(data, message, original_len);
+    size_t data_len = original_len;
+    
+    // Key and IV for demonstration
+    uint8_t key[8] = {0x01, 0x23, 0x45, 0x67, 0x89, 0xAB, 0xCD, 0xEF};
+    uint8_t iv[BLOCK_SIZE] = {0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77};
+    
+    printf("Original message (%zu bytes):\n", original_len);
+    printf("%s\n\n", message);
+    
+    // Pad the data (will pad even if already block-aligned)
+    pad_data(&data, &data_len, BLOCK_SIZE);
+    printf("After padding (%zu bytes):\n", data_len);
+    print_hex("Padded data", data, data_len);
+    printf("\n");
+    
+    // Allocate ciphertext buffer
+    uint8_t *ciphertext = malloc(data_len);
+    
+    // ECB Mode
+    ecb_encrypt(data, data_len, ciphertext, key);
+    printf("ECB Mode:\n");
+    print_hex("Ciphertext", ciphertext, data_len);
+    printf("\n");
+    
+    // CBC Mode
+    cbc_encrypt(data, data_len, ciphertext, key, iv);
+    printf("CBC Mode:\n");
+    print_hex("Ciphertext", ciphertext, data_len);
+    printf("\n");
+    
+    // CFB Mode (uses segment size)
+    // Need to pad to segment size for CFB
+    size_t cf_data_len = original_len;
+    uint8_t *cf_data = malloc(original_len);
+    memcpy(cf_data, message, original_len);
+    pad_data(&cf_data, &cf_data_len, SEGMENT_SIZE);
+    
+    uint8_t *cf_ciphertext = malloc(cf_data_len);
+    cfb_encrypt(cf_data, cf_data_len, cf_ciphertext, key, iv);
+    printf("CFB Mode (%d-byte segments):\n", SEGMENT_SIZE);
+    print_hex("Ciphertext", cf_ciphertext, cf_data_len);
+    printf("\n");
+    
+    /* 
+     * Motivation for always padding:
+     * 
+     * 1. Prevents Ambiguity: Without a padding indicator, the receiver can't 
+     *    reliably determine if the last block was padded or not when the original 
+     *    data was exactly a multiple of the block size.
+     * 
+     * 2. Security: Always padding prevents potential information leakage about 
+     *    the exact length of the original message.
+     * 
+     * 3. Simpler Implementation: The receiver can always remove the last block's 
+     *    padding without needing to know if padding was actually added.
+     * 
+     * 4. Protocol Consistency: Some attacks exploit differences in how messages 
+     *    are handled based on length. Uniform padding eliminates this variation.
+     */
+    printf("Motivation for always padding:\n");
+    printf("1. Removes ambiguity about whether the last block was padded\n");
+    printf("2. Prevents potential information leakage about message length\n");
+    printf("3. Simplifies receiver's padding removal logic\n");
+    printf("4. Provides consistent handling of all messages\n");
+    
+    // Cleanup
+    free(data);
+    free(ciphertext);
+    free(cf_data);
+    free(cf_ciphertext);
+    
+    return 0;
+}
