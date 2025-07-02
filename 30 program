@@ -1,0 +1,102 @@
+#include <stdio.h>
+#include <stdint.h>
+#include <string.h>
+#include <stdlib.h>
+
+#define BLOCK_SIZE 16  // AES block size (16 bytes)
+
+// Simulated block cipher encryption (using AES-NI would be better in practice)
+void block_cipher_encrypt(const uint8_t *key, const uint8_t *plaintext, uint8_t *ciphertext) {
+    // In practice, this would be AES encryption
+    // For demonstration, we'll use a simple XOR cipher
+    for (int i = 0; i < BLOCK_SIZE; i++) {
+        ciphertext[i] = plaintext[i] ^ key[i % 16];
+    }
+}
+
+// Compute CBC MAC for a message
+void cbc_mac(const uint8_t *key, const uint8_t *message, size_t msg_blocks, uint8_t *mac) {
+    uint8_t iv[BLOCK_SIZE] = {0};  // IV is typically zero for CBC-MAC
+    uint8_t temp[BLOCK_SIZE];
+    
+    memcpy(temp, iv, BLOCK_SIZE);
+    
+    for (size_t i = 0; i < msg_blocks; i++) {
+        // XOR with previous ciphertext (or IV for first block)
+        for (int j = 0; j < BLOCK_SIZE; j++) {
+            temp[j] ^= message[i * BLOCK_SIZE + j];
+        }
+        
+        // Block cipher encryption
+        block_cipher_encrypt(key, temp, temp);
+    }
+    
+    memcpy(mac, temp, BLOCK_SIZE);
+}
+
+// Forge a valid MAC for X || (X ⊕ T)
+void forge_mac(const uint8_t *X, const uint8_t *T, uint8_t *forged_mac) {
+    // The forged MAC for X || (X ⊕ T) is simply T again
+    memcpy(forged_mac, T, BLOCK_SIZE);
+}
+
+int main() {
+    uint8_t key[BLOCK_SIZE];
+    uint8_t X[BLOCK_SIZE];  // One-block message
+    uint8_t T[BLOCK_SIZE];  // MAC of X
+    
+    // Initialize with example values
+    for (int i = 0; i < BLOCK_SIZE; i++) {
+        key[i] = rand() % 256;
+        X[i] = rand() % 256;
+    }
+    
+    // Compute legitimate MAC for X
+    cbc_mac(key, X, 1, T);
+    
+    printf("Original message X:\n");
+    for (int i = 0; i < BLOCK_SIZE; i++) printf("%02x ", X[i]);
+    printf("\n\n");
+    
+    printf("Legitimate MAC T = MAC(K, X):\n");
+    for (int i = 0; i < BLOCK_SIZE; i++) printf("%02x ", T[i]);
+    printf("\n\n");
+    
+    // Create the two-block message X || (X ⊕ T)
+    uint8_t two_block_msg[2 * BLOCK_SIZE];
+    memcpy(two_block_msg, X, BLOCK_SIZE);
+    for (int i = 0; i < BLOCK_SIZE; i++) {
+        two_block_msg[BLOCK_SIZE + i] = X[i] ^ T[i];
+    }
+    
+    printf("Forged message X || (X ⊕ T):\n");
+    for (int i = 0; i < 2 * BLOCK_SIZE; i++) {
+        printf("%02x ", two_block_msg[i]);
+        if (i == BLOCK_SIZE - 1) printf("|| ");
+    }
+    printf("\n\n");
+    
+    // Forge the MAC
+    uint8_t forged_T[BLOCK_SIZE];
+    forge_mac(X, T, forged_T);
+    
+    printf("Forged MAC T' = MAC(K, X || (X ⊕ T)):\n");
+    for (int i = 0; i < BLOCK_SIZE; i++) printf("%02x ", forged_T[i]);
+    printf("\n\n");
+    
+    // Verify the forgery by computing actual MAC
+    uint8_t actual_mac[BLOCK_SIZE];
+    cbc_mac(key, two_block_msg, 2, actual_mac);
+    
+    printf("Actual MAC(K, X || (X ⊕ T)):\n");
+    for (int i = 0; i < BLOCK_SIZE; i++) printf("%02x ", actual_mac[i]);
+    printf("\n\n");
+    
+    if (memcmp(forged_T, actual_mac, BLOCK_SIZE) == 0) {
+        printf("Success! The forged MAC matches the actual MAC.\n");
+    } else {
+        printf("Failure! The forged MAC doesn't match.\n");
+    }
+    
+    return 0;
+}
