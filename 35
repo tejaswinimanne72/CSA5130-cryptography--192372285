@@ -1,0 +1,95 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <time.h>
+#include <ctype.h>
+
+#define MAX_TEXT_LENGTH 1000
+#define MAX_KEY_LENGTH MAX_TEXT_LENGTH
+
+// Function prototypes
+void generate_random_key(int key[], int length);
+void encrypt(const char plaintext[], int key[], char ciphertext[], int length);
+void decrypt(const char ciphertext[], int key[], char decrypted[], int length);
+void print_key(int key[], int length);
+
+int main() {
+    char plaintext[MAX_TEXT_LENGTH];
+    char ciphertext[MAX_TEXT_LENGTH];
+    char decrypted[MAX_TEXT_LENGTH];
+    int key[MAX_KEY_LENGTH];
+    int text_length;
+
+    // Seed random number generator
+    srand(time(NULL));
+
+    printf("One-Time Pad Vigenère Cipher\n");
+    printf("Enter plaintext (letters only, no spaces): ");
+    fgets(plaintext, MAX_TEXT_LENGTH, stdin);
+    
+    // Remove newline and calculate length
+    text_length = strlen(plaintext);
+    if (plaintext[text_length - 1] == '\n') {
+        plaintext[text_length - 1] = '\0';
+        text_length--;
+    }
+
+    // Convert to uppercase and validate
+    for (int i = 0; i < text_length; i++) {
+        if (!isalpha(plaintext[i])) {
+            printf("Error: Only alphabetic characters allowed.\n");
+            return 1;
+        }
+        plaintext[i] = toupper(plaintext[i]);
+    }
+
+    // Generate random key
+    generate_random_key(key, text_length);
+
+    // Encrypt the plaintext
+    encrypt(plaintext, key, ciphertext, text_length);
+
+    // Decrypt the ciphertext
+    decrypt(ciphertext, key, decrypted, text_length);
+
+    // Display results
+    printf("\nPlaintext:  %s\n", plaintext);
+    printf("Key:        ");
+    print_key(key, text_length);
+    printf("\nCiphertext: %s\n", ciphertext);
+    printf("Decrypted:  %s\n", decrypted);
+
+    return 0;
+}
+
+// Generate random key values between 0 and 25
+void generate_random_key(int key[], int length) {
+    for (int i = 0; i < length; i++) {
+        key[i] = rand() % 26;
+    }
+}
+
+// Encrypt plaintext using the key
+void encrypt(const char plaintext[], int key[], char ciphertext[], int length) {
+    for (int i = 0; i < length; i++) {
+        // Shift character by key value (wrapping around Z to A)
+        ciphertext[i] = 'A' + (plaintext[i] - 'A' + key[i]) % 26;
+    }
+    ciphertext[length] = '\0';
+}
+
+// Decrypt ciphertext using the key
+void decrypt(const char ciphertext[], int key[], char decrypted[], int length) {
+    for (int i = 0; i < length; i++) {
+        // Reverse the shift (adding 26 to ensure positive modulo)
+        decrypted[i] = 'A' + (ciphertext[i] - 'A' - key[i] + 26) % 26;
+    }
+    decrypted[length] = '\0';
+}
+
+// Print the key as space-separated numbers
+void print_key(int key[], int length) {
+    for (int i = 0; i < length; i++) {
+        printf("%d ", key[i]);
+    }
+}
