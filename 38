@@ -1,0 +1,183 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <math.h>
+
+#define MAX_SIZE 10
+
+// Function prototypes
+void print_matrix(int size, int matrix[MAX_SIZE][MAX_SIZE]);
+int mod_inverse(int a, int m);
+int determinant(int size, int matrix[MAX_SIZE][MAX_SIZE]);
+void adjugate(int size, int matrix[MAX_SIZE][MAX_SIZE], int adj[MAX_SIZE][MAX_SIZE]);
+void inverse_matrix(int size, int matrix[MAX_SIZE][MAX_SIZE], int inv[MAX_SIZE][MAX_SIZE]);
+void matrix_multiply(int size, int a[MAX_SIZE][MAX_SIZE], int b[MAX_SIZE][MAX_SIZE], int result[MAX_SIZE][MAX_SIZE]);
+void solve_hill_key(int size, int plain[MAX_SIZE][MAX_SIZE], int cipher[MAX_SIZE][MAX_SIZE], int key[MAX_SIZE][MAX_SIZE]);
+
+int main() {
+    int size;
+    int plain[MAX_SIZE][MAX_SIZE], cipher[MAX_SIZE][MAX_SIZE], key[MAX_SIZE][MAX_SIZE];
+
+    printf("Hill Cipher Known Plaintext Attack\n");
+    printf("Enter matrix size (n x n, max %d): ", MAX_SIZE);
+    scanf("%d", &size);
+
+    if (size < 1 || size > MAX_SIZE) {
+        printf("Invalid size. Must be between 1 and %d.\n", MAX_SIZE);
+        return 1;
+    }
+
+    // Get plaintext matrix
+    printf("\nEnter plaintext matrix (n x n integers mod 26):\n");
+    for (int i = 0; i < size; i++) {
+        for (int j = 0; j < size; j++) {
+            scanf("%d", &plain[i][j]);
+            plain[i][j] %= 26;
+        }
+    }
+
+    // Get ciphertext matrix
+    printf("\nEnter ciphertext matrix (n x n integers mod 26):\n");
+    for (int i = 0; i < size; i++) {
+        for (int j = 0; j < size; j++) {
+            scanf("%d", &cipher[i][j]);
+            cipher[i][j] %= 26;
+        }
+    }
+
+    // Solve for the key matrix
+    solve_hill_key(size, plain, cipher, key);
+
+    // Print results
+    printf("\nRecovered Key Matrix:\n");
+    print_matrix(size, key);
+
+    // Verify the key
+    int test[MAX_SIZE][MAX_SIZE];
+    matrix_multiply(size, plain, key, test);
+    printf("\nVerification (plain * key mod 26):\n");
+    print_matrix(size, test);
+
+    return 0;
+}
+
+// Print a matrix
+void print_matrix(int size, int matrix[MAX_SIZE][MAX_SIZE]) {
+    for (int i = 0; i < size; i++) {
+        for (int j = 0; j < size; j++) {
+            printf("%3d ", matrix[i][j]);
+        }
+        printf("\n");
+    }
+}
+
+// Find modular inverse using extended Euclidean algorithm
+int mod_inverse(int a, int m) {
+    a = a % m;
+    for (int x = 1; x < m; x++) {
+        if ((a * x) % m == 1) {
+            return x;
+        }
+    }
+    return -1; // No inverse exists
+}
+
+// Calculate determinant of a matrix
+int determinant(int size, int matrix[MAX_SIZE][MAX_SIZE]) {
+    int det = 0;
+    int temp[MAX_SIZE][MAX_SIZE];
+    int sign = 1;
+
+    if (size == 1) {
+        return matrix[0][0];
+    }
+
+    for (int f = 0; f < size; f++) {
+        get_cofactor(size, matrix, temp, 0, f);
+        det += sign * matrix[0][f] * determinant(size - 1, temp);
+        sign = -sign;
+    }
+
+    return det;
+}
+
+// Get cofactor matrix (helper for determinant and adjugate)
+void get_cofactor(int size, int matrix[MAX_SIZE][MAX_SIZE], int temp[MAX_SIZE][MAX_SIZE], int p, int q) {
+    int i = 0, j = 0;
+    for (int row = 0; row < size; row++) {
+        for (int col = 0; col < size; col++) {
+            if (row != p && col != q) {
+                temp[i][j++] = matrix[row][col];
+                if (j == size - 1) {
+                    j = 0;
+                    i++;
+                }
+            }
+        }
+    }
+}
+
+// Calculate adjugate matrix
+void adjugate(int size, int matrix[MAX_SIZE][MAX_SIZE], int adj[MAX_SIZE][MAX_SIZE]) {
+    if (size == 1) {
+        adj[0][0] = 1;
+        return;
+    }
+
+    int sign = 1;
+    int temp[MAX_SIZE][MAX_SIZE];
+
+    for (int i = 0; i < size; i++) {
+        for (int j = 0; j < size; j++) {
+            get_cofactor(size, matrix, temp, i, j);
+            sign = ((i + j) % 2 == 0) ? 1 : -1;
+            adj[j][i] = (sign) * (determinant(size - 1, temp));
+        }
+    }
+}
+
+// Calculate inverse matrix mod 26
+void inverse_matrix(int size, int matrix[MAX_SIZE][MAX_SIZE], int inv[MAX_SIZE][MAX_SIZE]) {
+    int det = determinant(size, matrix);
+    int det_inv = mod_inverse(det, 26);
+
+    if (det == 0 || det_inv == -1) {
+        printf("Matrix is not invertible mod 26\n");
+        exit(1);
+    }
+
+    int adj[MAX_SIZE][MAX_SIZE];
+    adjugate(size, matrix, adj);
+
+    for (int i = 0; i < size; i++) {
+        for (int j = 0; j < size; j++) {
+            inv[i][j] = (adj[i][j] * det_inv) % 26;
+            if (inv[i][j] < 0) inv[i][j] += 26;
+        }
+    }
+}
+
+// Multiply two matrices mod 26
+void matrix_multiply(int size, int a[MAX_SIZE][MAX_SIZE], int b[MAX_SIZE][MAX_SIZE], int result[MAX_SIZE][MAX_SIZE]) {
+    for (int i = 0; i < size; i++) {
+        for (int j = 0; j < size; j++) {
+            result[i][j] = 0;
+            for (int k = 0; k < size; k++) {
+                result[i][j] += a[i][k] * b[k][j];
+            }
+            result[i][j] %= 26;
+            if (result[i][j] < 0) result[i][j] += 26;
+        }
+    }
+}
+
+// Solve for Hill cipher key: K = P⁻¹ × C
+void solve_hill_key(int size, int plain[MAX_SIZE][MAX_SIZE], int cipher[MAX_SIZE][MAX_SIZE], int key[MAX_SIZE][MAX_SIZE]) {
+    int inv_plain[MAX_SIZE][MAX_SIZE];
+    
+    // Calculate inverse of plaintext matrix
+    inverse_matrix(size, plain, inv_plain);
+    
+    // Multiply inverse plaintext with ciphertext to get key
+    matrix_multiply(size, inv_plain, cipher, key);
+}
