@@ -1,0 +1,110 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <ctype.h>
+#include <stdbool.h>
+
+// Function prototypes
+bool is_valid_a(int a);
+int encrypt_char(int a, int b, char p);
+int decrypt_char(int a, int b, char c);
+void encrypt_string(int a, int b, const char *plaintext, char *ciphertext);
+void decrypt_string(int a, int b, const char *ciphertext, char *decrypted);
+int mod_inverse(int a, int m);
+
+int main() {
+    int a, b;
+    char plaintext[100];
+    char ciphertext[100];
+    char decrypted[100];
+
+    printf("Affine Caesar Cipher\n");
+    
+    // Get valid 'a' value
+    do {
+        printf("Enter value for 'a' (must be coprime with 26): ");
+        scanf("%d", &a);
+        if (!is_valid_a(a)) {
+            printf("Invalid 'a' value. Must be one of: 1,3,5,7,9,11,15,17,19,21,23,25\n");
+        }
+    } while (!is_valid_a(a));
+
+    printf("Enter value for 'b': ");
+    scanf("%d", &b);
+    getchar(); // Consume newline
+    
+    printf("Enter plaintext (letters only): ");
+    fgets(plaintext, sizeof(plaintext), stdin);
+    plaintext[strcspn(plaintext, "\n")] = '\0'; // Remove newline
+
+    // Convert to uppercase
+    for (int i = 0; plaintext[i]; i++) {
+        plaintext[i] = toupper(plaintext[i]);
+    }
+
+    // Encrypt and decrypt
+    encrypt_string(a, b, plaintext, ciphertext);
+    decrypt_string(a, b, ciphertext, decrypted);
+
+    // Display results
+    printf("\nPlaintext:  %s\n", plaintext);
+    printf("Ciphertext: %s\n", ciphertext);
+    printf("Decrypted:  %s\n", decrypted);
+
+    return 0;
+}
+
+// Check if 'a' is valid (coprime with 26)
+bool is_valid_a(int a) {
+    int valid_as[] = {1,3,5,7,9,11,15,17,19,21,23,25};
+    int count = sizeof(valid_as)/sizeof(valid_as[0]);
+    
+    for (int i = 0; i < count; i++) {
+        if (a == valid_as[i]) {
+            return true;
+        }
+    }
+    return false;
+}
+
+// Encrypt a single character
+int encrypt_char(int a, int b, char p) {
+    if (!isalpha(p)) return p;
+    return 'A' + (a * (p - 'A') + b) % 26;
+}
+
+// Decrypt a single character
+int decrypt_char(int a, int b, char c) {
+    if (!isalpha(c)) return c;
+    int a_inv = mod_inverse(a, 26);
+    return 'A' + (a_inv * (26 + (c - 'A') - b)) % 26;
+}
+
+// Encrypt a string
+void encrypt_string(int a, int b, const char *plaintext, char *ciphertext) {
+    int i;
+    for (i = 0; plaintext[i]; i++) {
+        ciphertext[i] = encrypt_char(a, b, plaintext[i]);
+    }
+    ciphertext[i] = '\0';
+}
+
+// Decrypt a string
+void decrypt_string(int a, int b, const char *ciphertext, char *decrypted) {
+    int i;
+    for (i = 0; ciphertext[i]; i++) {
+        decrypted[i] = decrypt_char(a, b, ciphertext[i]);
+    }
+    decrypted[i] = '\0';
+}
+
+// Find modular inverse of 'a' modulo 'm'
+int mod_inverse(int a, int m) {
+    a = a % m;
+    for (int x = 1; x < m; x++) {
+        if ((a * x) % m == 1) {
+            return x;
+        }
+    }
+    return -1; // Should never happen for valid 'a'
+}
